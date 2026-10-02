@@ -1,0 +1,34 @@
+# Shareable view: the content component only (never the internal part).
+# Built with `make site`; inside a linked git worktree the Makefile builds from the
+# playbook that tools/guide/playbook.py generates from this file instead.
+site:
+  title: "{{TITLE}}"
+  start_page: guide::index.adoc
+content:
+  sources:
+  - url: .
+    branches: HEAD
+    start_path: content
+ui:
+  bundle:
+    url: https://github.com/rhpds/rhdp_showroom_theme/releases/download/v2.0.3/ui-bundle.zip
+    snapshot: false
+antora:
+  extensions:
+  # One standalone HTML document per view, the input of make pdf. The inline config
+  # selects the built-in Asciidoctor.js converter (no Ruby asciidoctor needed); it is
+  # inline rather than in antora-assembler.yml so it also applies to the playbooks
+  # generated for linked worktrees under build/.
+  - require: "@antora/html-single-extension"
+    config_source:
+      build:
+        command: false
+asciidoc:
+  attributes:
+    attribute-missing: warn
+    source-highlighter: highlightjs
+    page-pagination: ""
+    idprefix: ""
+    idseparator: "-"
+output:
+  dir: ./build/site

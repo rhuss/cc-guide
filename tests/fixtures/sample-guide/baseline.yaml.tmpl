@@ -1,0 +1,24 @@
+# Rendered into baseline.yaml by tests/toolkit/conftest.py and tests/adapters/scaffold.sh
+# from the output of tests/fixtures/make-mini-repo.sh.
+captured: "2026-01-06"
+sources:
+  - id: mini
+    repo: {{MINI_REPO_URL}}
+    ref: main
+    commit: {{MINI_FIRST_COMMIT}}
+    status: verified
+    attributes:
+      version: 1.2.3
+change_requests:
+  - source: mini
+    number: 4
+    head: {{MINI_SECOND_COMMIT}}
+    state: open
+    tier: in-review
+    anchor: status-history
+  - source: mini
+    number: 5
+    head: {{MINI_THIRD_COMMIT}}
+    state: merged
+    tier: on-main
+    anchor: admin-ui

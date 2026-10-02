@@ -1,0 +1,6 @@
+# UF-2 was fixed on the default branch after the pin and must be dropped with a
+# note; UF-1 still holds and must not be dropped. Nothing may be filed.
+expected:
+  UF-1: [reverified, drafted, rejected]
+  UF-2: [dropped]
+difficulty: medium

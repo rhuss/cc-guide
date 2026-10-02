@@ -1,0 +1,25 @@
+# superpowers contract cc-guide relies on (FR-004), read by scripts/superpowers-probe.sh.
+# Keep the list format (one "- item" per line): the probe parses it without yq.
+
+# Versions the probe and the create/evolve flows were tested with.
+# A version not listed here runs with a warning when the probe passes.
+known_good:
+  - "6.3.0"
+  - "6.4.1"
+
+# Oldest supported version; an older one fails the probe (exit 4).
+minimum_version: "6.3.0"
+
+# Skills cc-guide invokes; each must exist as skills/<name>/SKILL.md.
+required_skills:
+  - brainstorming
+  - writing-plans
+  - subagent-driven-development
+  - requesting-code-review
+
+# Scripts under skills/subagent-driven-development/scripts/, always run as `bash <script>`.
+# Without arguments each must exit 2 and print a line starting with "usage:".
+required_scripts:
+  - sdd-workspace
+  - task-brief
+  - review-package

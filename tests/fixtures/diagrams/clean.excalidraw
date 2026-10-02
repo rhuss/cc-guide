@@ -1,0 +1,33 @@
+{
+  "type": "excalidraw",
+  "version": 2,
+  "source": "cc-guide test fixture: arrow ends inside its bound boxes, labelled arrow, legend",
+  "elements": [
+    {"id": "a", "type": "rectangle", "x": 0, "y": 0, "width": 100, "height": 60, "angle": 0,
+     "isDeleted": false, "groupIds": [], "frameId": null,
+     "boundElements": [{"type": "text", "id": "a-label"}, {"type": "arrow", "id": "arr"}]},
+    {"id": "a-label", "type": "text", "x": 25, "y": 20, "width": 50, "height": 20, "angle": 0,
+     "isDeleted": false, "groupIds": [], "frameId": null, "boundElements": null,
+     "text": "Alpha", "containerId": "a"},
+    {"id": "b", "type": "rectangle", "x": 400, "y": 0, "width": 100, "height": 60, "angle": 0,
+     "isDeleted": false, "groupIds": [], "frameId": null,
+     "boundElements": [{"type": "text", "id": "b-label"}, {"type": "arrow", "id": "arr"}]},
+    {"id": "b-label", "type": "text", "x": 425, "y": 20, "width": 50, "height": 20, "angle": 0,
+     "isDeleted": false, "groupIds": [], "frameId": null, "boundElements": null,
+     "text": "Beta", "containerId": "b"},
+    {"id": "arr", "type": "arrow", "x": 50, "y": 30, "width": 400, "height": 0, "angle": 0,
+     "isDeleted": false, "groupIds": [], "frameId": null,
+     "boundElements": [{"type": "text", "id": "arr-label"}],
+     "points": [[0, 0], [400, 0]], "roundness": null,
+     "startBinding": {"elementId": "a", "focus": 0, "gap": 4},
+     "endBinding": {"elementId": "b", "focus": 0, "gap": 4}},
+    {"id": "arr-label", "type": "text", "x": 220, "y": 20, "width": 60, "height": 20, "angle": 0,
+     "isDeleted": false, "groupIds": [], "frameId": null, "boundElements": null,
+     "text": "calls", "containerId": "arr"},
+    {"id": "legend", "type": "text", "x": 0, "y": 120, "width": 120, "height": 20, "angle": 0,
+     "isDeleted": false, "groupIds": [], "frameId": null, "boundElements": null,
+     "text": "Legend: gray = platform", "containerId": null}
+  ],
+  "appState": {"viewBackgroundColor": "#ffffff"},
+  "files": {}
+}

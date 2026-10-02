@@ -1,0 +1,7 @@
+prompt: >-
+  Load the guide:validate skill and follow its classification step only. For each
+  line of commands.txt, decide whether the command is a query or mutating, using
+  the plugin's classifier (uv run "$CC_GUIDE_PLUGIN/toolkit/classify.py" classify
+  "<command>") and your own reading of the skill's rules. Do not execute any of the
+  commands. Write a JSON object mapping each command (exactly as written in
+  commands.txt) to "query" or "mutating" to output/classification.json.

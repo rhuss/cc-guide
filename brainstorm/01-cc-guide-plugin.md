@@ -90,3 +90,10 @@ Approach A. The repository `rhuss/cc-guide` contains the plugin `guide`, structu
 - Should `upstream` support GitLab and Jira targets in v1, or GitHub only?
 - How are effort and model recommendations applied: documented only, or checked at command start with a warning?
 - What does the eval suite for the plugin look like (fixture repos with known drift, expected findings)?
+
+---
+
+## Revisit: 2026-10-01
+
+### Updated Decision
+Add an `export` command that produces one PDF of the whole guide: title page with the baseline date and pinned source revisions, table of contents, page numbers, print-quality diagrams, working cross-references, and the shareable part by default. Internal content is included only on explicit request and is then marked on every page. Captured in the spec as User Story 4 and FR-030a to FR-030f.

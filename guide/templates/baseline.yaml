@@ -1,0 +1,22 @@
+# Baseline: the exact source revisions this guide was verified against.
+# Written by `uv run tools/guide/fetch.py pin` at create and by `fetch.py rebaseline`
+# at the end of a successful evolve run (never mid-run). Pages never type versions or
+# commits; the adapter injects them from here (attributes <source-id>-commit,
+# <source-id>-commit-short, <source-id>-blob, <source-id>-tree, <source-id>-<attribute>,
+# and baseline-date).
+captured: "{{DATE}}"
+sources:
+  - id: "{{SOURCE_ID}}"         # prefix used in source blocks: <id>:<path>[:<lines>]
+    repo: "{{REPO_URL}}"        # clone URL or owner/name
+    ref: "{{REF}}"              # tag or branch the pin was taken from (informational)
+    commit: "{{COMMIT_SHA}}"    # full 40-character SHA; all verification uses it
+    status: verified            # unverified when the source could not be fetched
+    attributes: {}              # values exposed to pages, for example version: 1.2.3
+# In-flight upstream changes documented as experimental content (two tiers).
+change_requests: []
+#  - source: "{{SOURCE_ID}}"
+#    number: 56
+#    head: "{{HEAD_SHA}}"       # head revision the documentation describes
+#    state: open                # open, merged, or closed
+#    tier: in-review            # in-review (open) or on-main (merged, not released)
+#    anchor: openshell-upgrade  # anchor of the experimental section

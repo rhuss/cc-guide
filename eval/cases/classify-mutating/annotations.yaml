@@ -1,0 +1,13 @@
+# Expected classification (contracts/page-conventions.md, section 3).
+expected:
+  "oc get pods -n saw": query
+  "oc debug node/worker-0": mutating
+  "kubectl exec -it pod/x -- ls": mutating
+  "make install": mutating
+  "oc get secret x -o yaml > secret.yaml": mutating
+  "curl -s https://example.com/status | jq .state": query
+  "curl -X POST https://example.com/api -d '{}'": mutating
+  "oc logs deploy/x | tee out.log": mutating
+  "oc delete pod x": mutating
+  "kubectl auth can-i create pods": query
+difficulty: easy

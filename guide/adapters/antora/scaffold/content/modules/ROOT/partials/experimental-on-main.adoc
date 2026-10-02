@@ -1,0 +1,18 @@
+// Experimental label, tier on-main: merged on the default branch, not in the pinned release.
+// Parameters (set before the include, unset after): feature-name, feature-pr, feature-anchor,
+// and feature-repo (optional, links the change request). feature-anchor names the id of the
+// section that holds this label (baseline.yaml change_requests[].anchor); the section heading
+// carries that id, either as its automatic id or as an explicit [#<anchor>] line, so the
+// label itself sets no id (a second block with the same id fails the warning-level build).
+[IMPORTANT]
+.Experimental: merged, not yet released
+====
+{feature-name} is merged on the default branch but is not part of the baseline ({baseline-date}).
+Its behavior may change before it is released.
+ifdef::feature-repo[]
+See link:{feature-repo}/pull/{feature-pr}[change request{nbsp}#{feature-pr}^].
+endif::[]
+ifndef::feature-repo[]
+It was introduced by change request{nbsp}#{feature-pr}.
+endif::[]
+====

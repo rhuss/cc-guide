@@ -1,0 +1,6 @@
+[NOTE]
+.Baseline
+====
+This guide was verified against {baseline-sources} (captured {baseline-date}).
+Later revisions of these sources may rename targets or change defaults.
+====

@@ -1,0 +1,69 @@
+# Guide project configuration (cc-guide schema 1).
+# Written by /guide:create from the intake interview; edit by hand when needed and
+# run `uv run tools/guide/guidecfg.py validate` afterwards. Unknown keys are errors.
+schema: 1
+
+# Shown on the site header and the PDF title page.
+title: "{{TITLE}}"
+
+# Output adapter: antora, mkdocs, or gfm. Fixed after create.
+format: "{{FORMAT}}"
+
+# Reader roles. Each persona has its own section and an entry page
+# (path without extension, relative to the adapter's page directory).
+personas:
+  - id: admin
+    title: Administrator
+    start: admin/index
+  - id: user
+    title: User
+    start: user/index
+
+# Navigation sections in reading order. `voice` is a cc-prose voice profile when
+# cc-prose is installed, otherwise one of the built-in styles: concepts, technical, reference.
+sections:
+  - id: overview
+    title: Overview
+    voice: concepts
+  - id: admin
+    title: Admin guide
+    voice: technical
+  - id: user
+    title: User guide
+    voice: technical
+  - id: reference
+    title: Reference
+    voice: reference
+
+# fast (final review only), standard (per-page reviews, the default), or strict
+# (standard plus the claim ledger). A run can override it with --rigor.
+rigor: standard
+
+internal:
+  # true adds an internal part that never reaches the shareable build or PDF.
+  enabled: false
+  # Exact terms (case-insensitive) that must never appear in shareable output,
+  # for example customer names.
+  confidential_terms: []
+  # Regular expressions, for example a ticket key format: '\b[A-Z]{2,}-\d+\b'
+  confidential_patterns: []
+
+# Optional cluster connections for /guide:validate. Only references are stored:
+# the kubeconfig content is never read into the project. Set disposable: true only
+# for a throwaway cluster; it unlocks the full (mutating) validation tier.
+clusters: {}
+#  readonly-test:
+#    kubeconfig: ~/.kube/readonly-config
+#    context: my-context
+#    disposable: false
+
+# Extra read-only command patterns for /guide:validate (additive only).
+validate:
+  extra_queries: []
+
+# Scheduled drift check (.github/workflows/guide-drift.yml): "off" or a cron expression.
+drift:
+  schedule: "off"
+
+upstream:
+  target: github

@@ -1,0 +1,5 @@
+Account notes (fixture, confidential)
+
+ACME Corp is the first customer for minisvc.
+Their production rollout is planned for 2026-11-15.
+Open questions are tracked in MINI-42.

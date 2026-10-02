@@ -1,0 +1,5 @@
+# pytest configuration only; the toolkit scripts carry their own PEP 723 metadata.
+[tool.pytest.ini_options]
+testpaths = ["tests/toolkit"]
+pythonpath = ["guide/toolkit"]
+addopts = "-q"

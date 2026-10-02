@@ -1,0 +1,42 @@
+# Antora adapter descriptor (contracts/adapter.md). Create copies it into a guide
+# project as tools/guide/adapter.yaml; doctor, check, leakcheck, and the skills read it.
+format: antora
+
+# Tool chain, checked by tools/guide/doctor.py (make doctor).
+requires:
+  node: ">=20"
+  npm: "*"
+  uv: "*"
+  git: "*"
+  antora: "~3.2.0"
+  playwright-chromium: "*"
+
+# Shareable and internal content roots, and the pages under them.
+content_root: content
+internal_root: internal
+page_glob: "modules/*/pages/**/*.adoc"
+image_dir: content/modules/ROOT/images
+
+# Source blocks and expectations are AsciiDoc line comments (// Sources:, // expect:).
+comment: line
+
+# The five admonition types (contracts/page-conventions.md, section 5).
+admonitions:
+  note: "[NOTE]"
+  tip: "[TIP]"
+  important: "[IMPORTANT]"
+  warning: "[WARNING]"
+  caution: "[CAUTION]"
+
+# Experimental labels: set feature-name, feature-pr, feature-anchor (and optionally
+# feature-repo) as attribute entries, include the partial, then unset them. The ROOT:
+# module prefix lets internal pages (module `internal`) include the same partials.
+experimental:
+  in-review: "include::ROOT:partial$experimental-in-review.adoc[]"
+  on-main: "include::ROOT:partial$experimental-on-main.adoc[]"
+
+# Baseline values reach pages as Antora attributes passed by `make site`
+# (tools/guide/attrs.py export --format antora).
+attributes: antora-attribute
+
+preview_port: 8000

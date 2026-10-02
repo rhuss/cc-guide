@@ -1,0 +1,13 @@
+# Input register: transcripts, tickets, links, notes, and documents that inform the
+# guide. Only references live here; raw inputs are never copied into this project,
+# and a location inside the project is rejected. Claims from inputs reach a page only
+# after they are verified against a pinned source. Content derived from an input marked
+# confidential may appear only on internal pages, cited there as input:<id>.
+inputs: []
+#  - id: walkthrough-1
+#    kind: transcript          # transcript, ticket, link, notes, or document
+#    location: ~/transcripts/walkthrough-1.txt
+#    role: admin walkthrough part 1
+#    sha256: "<checksum at registration, empty for links that are not fetched>"
+#    confidential: false
+#    registered: "{{DATE}}"

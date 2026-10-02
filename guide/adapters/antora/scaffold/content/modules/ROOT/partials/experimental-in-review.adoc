@@ -1,0 +1,17 @@
+// Experimental label, tier in-review: an open change request, described at its recorded head.
+// Parameters (set before the include, unset after): feature-name, feature-pr, feature-anchor,
+// and feature-repo (optional, links the change request). feature-anchor names the id of the
+// section that holds this label (baseline.yaml change_requests[].anchor); the section heading
+// carries that id, either as its automatic id or as an explicit [#<anchor>] line, so the
+// label itself sets no id (a second block with the same id fails the warning-level build).
+[IMPORTANT]
+.Experimental: in review
+====
+{feature-name} is not part of the baseline.
+ifdef::feature-repo[]
+It is proposed in link:{feature-repo}/pull/{feature-pr}[change request{nbsp}#{feature-pr}^] (status as of {baseline-date}) and may change or be dropped before it merges.
+endif::[]
+ifndef::feature-repo[]
+It is proposed in change request{nbsp}#{feature-pr} (status as of {baseline-date}) and may change or be dropped before it merges.
+endif::[]
+====

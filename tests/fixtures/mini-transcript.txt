@@ -1,0 +1,10 @@
+Walkthrough: minisvc for new admins (fixture transcript)
+
+Speaker A: So minisvc is the little status service. You install it with make install, that's the whole setup.
+Speaker A: Then you run make status and it should say ok.
+Speaker B: Which port does it listen on?
+Speaker A: The API is on the port from the config file. And there is an admin UI on port 7070, you can open it in the browser after the install.
+Speaker B: Is the admin UI on by default?
+Speaker A: Yes, it comes up with the service.
+Speaker B: And it only listens on localhost?
+Speaker A: Right, it binds to 127.0.0.1, so you need to be on the host.

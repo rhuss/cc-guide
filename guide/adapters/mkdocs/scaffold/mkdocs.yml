@@ -1,0 +1,73 @@
+# Shareable view of the guide (MkDocs Material adapter, cc-guide).
+# Build:   make site      (uvx --with-requirements requirements.txt mkdocs build --strict)
+# The internal view is mkdocs-internal.yml, which inherits this file.
+site_name: "{{TITLE}}"
+docs_dir: docs
+site_dir: build/site
+use_directory_urls: false
+strict: true
+
+# The internal part never reaches the shareable build (FR-019, FR-030e).
+exclude_docs: |
+  internal/
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.indexes
+    - content.code.copy
+
+extra_css:
+  - assets/experimental.css
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - pymdownx.details
+  - pymdownx.superfences
+  - toc:
+      permalink: false
+
+plugins:
+  - search
+  # Click to enlarge for diagrams (FR-022a).
+  - glightbox
+  # Baseline values and experimental labels (tools/guide/mkdocs_macros.py).
+  # Non-default delimiters: {{= attr("name") }}. Go, Helm, Ansible, and shell syntax
+  # in listings ({{ .Values.x }}, {% if %}, ${#array[@]}) stays literal.
+  - macros:
+      module_name: tools/guide/mkdocs_macros
+      include_yaml:
+        - baseline.yaml
+      on_undefined: strict
+      on_error_fail: true
+      j2_variable_start_string: "{{="
+      j2_variable_end_string: "}}"
+      j2_block_start_string: "{%="
+      j2_block_end_string: "%}"
+      j2_comment_start_string: "{#="
+      j2_comment_end_string: "#}"
+  # One print page with every page in navigation order, input for make pdf.
+  # It must stay the last plugin.
+  - print-site:
+      add_to_navigation: false
+      print_page_title: "{{TITLE}}"
+      # make pdf adds its own linked table of contents (print-pdf.mjs).
+      add_table_of_contents: false
+      enumerate_headings: false
+      add_full_urls: false
+      add_cover_page: false
+
+# Warnings fail the strict build, so a broken link or anchor cannot slip through.
+validation:
+  omitted_files: info
+  absolute_links: warn
+  unrecognized_links: warn
+  anchors: warn
+
+# Navigation in reading order; page tasks add their pages here.
+nav:
+  - index.md

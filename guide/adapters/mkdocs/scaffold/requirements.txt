@@ -1,0 +1,9 @@
+# MkDocs tool chain for this guide, used through uvx (never pip):
+#   uvx --with-requirements requirements.txt mkdocs build
+# MkDocs Material is in maintenance mode; keep it below 9.8 until the adapter moves on.
+mkdocs==1.6.1
+mkdocs-material==9.7.7
+mkdocs-macros-plugin==1.5.0
+mkdocs-print-site-plugin==2.8
+mkdocs-glightbox==0.5.2
+pymdown-extensions==10.21.3

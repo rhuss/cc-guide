@@ -1,0 +1,8 @@
+prompt: >-
+  Run `bash setup.sh` in the current directory first. Then follow the guide:upstream
+  skill for the guide project in guide-project/ (use --dir guide-project), but this
+  is an offline rehearsal: skip the GitHub search for existing issues, never run
+  gh issue create, gh repo fork, gh pr create, or git push, and treat every draft as
+  rejected by the author with the note "eval rehearsal". The source repository is a
+  local path, so re-verification works without the network. Finish with a short
+  list of each finding and its final status.

@@ -1,0 +1,14 @@
+{
+  "name": "guide-site",
+  "private": true,
+  "description": "Antora build of a cc-guide guide project",
+  "devDependencies": {
+    "@antora/cli": "~3.2.0",
+    "@antora/html-single-extension": "^1.0.0",
+    "@antora/site-generator": "~3.2.0",
+    "browser-sync": "^3.0.4",
+    "chokidar": "^4.0.3",
+    "js-yaml": "^4.1.0",
+    "playwright": "^1.48.0"
+  }
+}

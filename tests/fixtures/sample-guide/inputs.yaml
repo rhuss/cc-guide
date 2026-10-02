@@ -1,0 +1,18 @@
+# Input register of the fixture guide. {{FIXTURES_DIR}} is replaced with the
+# absolute path of tests/fixtures when the fixture guide is rendered, so every
+# location lies outside the guide project.
+inputs:
+  - id: walkthrough
+    kind: transcript
+    location: "{{FIXTURES_DIR}}/mini-transcript.txt"
+    role: admin walkthrough
+    sha256: 44ce992706bc0db378dbe68ec1276314429468ae9cca373500bd228929030d4e
+    confidential: false
+    registered: "2026-01-06"
+  - id: customer-notes
+    kind: notes
+    location: "{{FIXTURES_DIR}}/mini-confidential-notes.txt"
+    role: account context
+    sha256: cedb86661e1a627443c246848a0e5da595d436e2863580701e4fc888fc24688f
+    confidential: true
+    registered: "2026-01-06"

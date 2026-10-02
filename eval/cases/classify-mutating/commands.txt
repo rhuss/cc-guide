@@ -1,0 +1,10 @@
+oc get pods -n saw
+oc debug node/worker-0
+kubectl exec -it pod/x -- ls
+make install
+oc get secret x -o yaml > secret.yaml
+curl -s https://example.com/status | jq .state
+curl -X POST https://example.com/api -d '{}'
+oc logs deploy/x | tee out.log
+oc delete pod x
+kubectl auth can-i create pods

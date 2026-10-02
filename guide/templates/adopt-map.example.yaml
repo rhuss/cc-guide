@@ -1,0 +1,60 @@
+# Adoption map: translates a foreign baseline.yaml into the cc-guide baseline schema.
+# Used by `uv run tools/guide/adopt.py migrate --map <this file>` (/guide:evolve --adopt).
+# The original file is kept as baseline.foreign.yaml; the result must pass
+# `uv run tools/guide/guidecfg.py validate`.
+#
+# This example maps the SAW guide's baseline (saw.*, openshell.*) onto three
+# sources and its open pull requests onto change requests.
+#
+# Value forms:
+#   .a.b.c                      a path into the foreign file (dotted keys, [N] for a list item)
+#   saw                         anything not starting with "." is a literal (strings, numbers, booleans)
+#   {value: ".literal"}         a literal string that starts with a dot
+#   {path: .a.b, default: x}    a path with a default for when it is missing
+#   {by: .number, map: {...}, default: x}
+#                               look up the value found at `by` in `map`
+#
+# In a change_requests entry with `each: <path>[]`, the entry is produced once per
+# list item, and paths are relative to that item ("." is the item itself). Use "$."
+# to reach the root of the foreign file from inside an `each` entry.
+#
+# Required fields (captured, source id/repo/commit, change request
+# source/number/head/state/tier/anchor) must resolve to a value; attributes that
+# resolve to nothing are left out.
+
+captured: .captured
+
+sources:
+  - id: saw
+    repo: .saw.repo
+    ref: .saw.branch
+    commit: .saw.commit
+    attributes:
+      openshell-version: .saw.openshell_version
+  - id: openshell
+    repo: .openshell.repo
+    ref: .openshell.deployed.tag
+    commit: .openshell.deployed.commit
+  - id: openshell-main
+    repo: .openshell.repo
+    ref: .openshell.branch
+    commit: .openshell.upstream.commit
+    attributes:
+      latest-tag: .openshell.upstream.latest_tag
+
+change_requests:
+  - each: .saw.open_prs[]
+    source: saw
+    number: .number
+    head: .head
+    state: open
+    tier: in-review
+    anchor:
+      by: .number
+      map:
+        33: rhdh-portal
+        37: gpu-passthrough
+        52: apf-switch
+        53: harness-bundles
+        55: agent-identity
+        56: openshell-upgrade

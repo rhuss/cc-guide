@@ -1,0 +1,45 @@
+# MkDocs Material adapter descriptor (contracts/adapter.md). Create copies it into a
+# guide project as tools/guide/adapter.yaml; doctor, check, leakcheck, and the skills read it.
+# MkDocs Material is in maintenance mode (bug fixes only); versions are pinned in the
+# scaffold's requirements.txt and run through uvx, never pip (research R6).
+format: mkdocs
+
+# Tool chain, checked by tools/guide/doctor.py (make doctor).
+requires:
+  uv: "*"
+  git: "*"
+  node: ">=20"
+  npm: "*"
+  mkdocs: ">=1.6"
+  playwright-chromium: "*"
+
+# Shareable pages live under docs/; the internal part is docs/internal/, excluded from
+# the shareable build (mkdocs.yml exclude_docs) and included by mkdocs-internal.yml.
+content_root: docs
+internal_root: docs/internal
+page_glob: "**/*.md"
+image_dir: docs/assets/diagrams
+
+# Source blocks and expectations are HTML comments (<!-- Sources: ... -->, <!-- expect: ... -->).
+comment: html
+
+# The five admonition types (contracts/page-conventions.md, section 5). important and
+# caution are custom types styled by docs/assets/experimental.css.
+admonitions:
+  note: "!!! note"
+  tip: "!!! tip"
+  important: "!!! important"
+  warning: "!!! warning"
+  caution: "!!! caution"
+
+# Experimental labels: a macro from tools/guide/mkdocs_macros.py renders an
+# `experimental` admonition. The section heading carries the change request's anchor.
+experimental:
+  in-review: '{{= experimental("in-review", "<feature name>", <pr number>) }}'
+  on-main: '{{= experimental("on-main", "<feature name>", <pr number>) }}'
+
+# Baseline values reach pages through mkdocs-macros: {{= attr("<name>") }}.
+# Non-default Jinja delimiters keep Go, Helm, Ansible, and shell syntax in listings literal.
+attributes: mkdocs-macros
+
+preview_port: 8000

@@ -1,0 +1,14 @@
+# Internal view of the guide: everything in mkdocs.yml plus docs/internal/.
+# Build: make site-internal (only when internal.enabled is true in guide.yaml).
+# Never share build/site-internal or anything made from it outside the internal audience.
+INHERIT: mkdocs.yml
+site_name: "{{TITLE}} (internal)"
+site_dir: build/site-internal
+
+# Include the internal part (mkdocs.yml excludes it from the shareable build).
+exclude_docs: |
+  /.cc-guide-nothing-excluded/
+
+# Navigation: the shareable sections, then the internal sections.
+nav:
+  - index.md

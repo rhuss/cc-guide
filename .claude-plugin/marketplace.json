@@ -1,0 +1,24 @@
+{
+  "name": "guide-plugin-development",
+  "owner": {
+    "name": "Roland Huss",
+    "email": "rhuss@redhat.com"
+  },
+  "metadata": {
+    "description": "Local development marketplace for the guide plugin: source-verified, persona-split guides created and evolved against pinned sources."
+  },
+  "plugins": [
+    {
+      "name": "guide",
+      "version": "0.1.0",
+      "description": "Create, evolve, preview, export, and validate source-verified guides from transcripts, notes, and pinned source repositories",
+      "author": {
+        "name": "Roland Huss",
+        "email": "rhuss@redhat.com"
+      },
+      "source": "./guide",
+      "homepage": "https://github.com/rhuss/cc-guide",
+      "repository": "https://github.com/rhuss/cc-guide.git"
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+# Format-neutral fixture guide. tests/adapters/convert.py sets `format` when it
+# converts the pages into an adapter's layout.
+schema: 1
+title: minisvc guide
+format: antora
+personas:
+  - id: admin
+    title: Administrator
+    start: admin/install
+  - id: user
+    title: User
+    start: user/start
+sections:
+  - id: overview
+    title: Overview
+    voice: concepts
+  - id: admin
+    title: Admin guide
+    voice: technical
+  - id: user
+    title: User guide
+    voice: technical
+rigor: standard
+internal:
+  enabled: true
+  confidential_terms:
+    - ACME Corp
+  confidential_patterns:
+    - '\b[A-Z]{2,}-\d+\b'
+clusters:
+  local:
+    kubeconfig: ~/.kube/fixture-readonly
+    disposable: false
+drift:
+  schedule: "off"
+upstream:
+  target: github

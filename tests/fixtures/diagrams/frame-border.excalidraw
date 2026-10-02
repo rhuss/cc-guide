@@ -1,0 +1,27 @@
+{
+  "type": "excalidraw",
+  "version": 2,
+  "source": "cc-guide test fixture: boxes and labels on frame borders (a real frame and a group frame)",
+  "elements": [
+    {"id": "f1", "type": "frame", "x": 0, "y": 0, "width": 300, "height": 200, "angle": 0,
+     "isDeleted": false, "groupIds": [], "frameId": null, "boundElements": null, "name": "Platform"},
+    {"id": "inside", "type": "rectangle", "x": 40, "y": 40, "width": 100, "height": 60, "angle": 0,
+     "isDeleted": false, "groupIds": [], "frameId": "f1", "boundElements": null},
+    {"id": "straddle", "type": "rectangle", "x": 250, "y": 50, "width": 100, "height": 60, "angle": 0,
+     "isDeleted": false, "groupIds": [], "frameId": null, "boundElements": null},
+    {"id": "flabel", "type": "text", "x": -20, "y": 150, "width": 80, "height": 20, "angle": 0,
+     "isDeleted": false, "groupIds": [], "frameId": null, "boundElements": null,
+     "text": "Platform", "containerId": null},
+    {"id": "g-frame", "type": "rectangle", "x": 500, "y": 0, "width": 300, "height": 200, "angle": 0,
+     "isDeleted": false, "groupIds": ["g1"], "frameId": null, "boundElements": null},
+    {"id": "g-child", "type": "rectangle", "x": 540, "y": 40, "width": 100, "height": 60, "angle": 0,
+     "isDeleted": false, "groupIds": ["g1"], "frameId": null, "boundElements": null},
+    {"id": "g-title", "type": "text", "x": 480, "y": -10, "width": 100, "height": 20, "angle": 0,
+     "isDeleted": false, "groupIds": ["g1"], "frameId": null, "boundElements": null,
+     "text": "Governance", "containerId": null},
+    {"id": "far", "type": "rectangle", "x": 900, "y": 0, "width": 50, "height": 50, "angle": 0,
+     "isDeleted": false, "groupIds": [], "frameId": null, "boundElements": null}
+  ],
+  "appState": {"viewBackgroundColor": "#ffffff"},
+  "files": {}
+}

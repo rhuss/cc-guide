@@ -1,0 +1,6 @@
+name: guide
+title: "{{TITLE}}"
+version: ~
+start_page: ROOT:index.adoc
+nav:
+- modules/ROOT/nav.adoc

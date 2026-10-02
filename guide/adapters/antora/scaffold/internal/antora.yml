@@ -1,0 +1,10 @@
+# The internal part: a separate module of the same component, built only by
+# site-internal.yml. Shareable pages never reference it.
+# In the internal build this descriptor's nav replaces the one in content/antora.yml
+# (the component version is merged from both origins), so it lists the shareable
+# navigation first; otherwise the internal site and its PDF would lack the shareable pages.
+name: guide
+version: ~
+nav:
+- modules/ROOT/nav.adoc
+- modules/internal/nav.adoc

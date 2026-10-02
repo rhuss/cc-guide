@@ -1,0 +1,15 @@
+# Navigation order of the neutral fixture pages (paths without extension).
+shareable:
+  - title: Overview
+    pages:
+      - index
+  - title: Admin guide
+    pages:
+      - admin/install
+  - title: User guide
+    pages:
+      - user/start
+internal:
+  - title: Internal notes
+    pages:
+      - internal/notes

@@ -1,0 +1,57 @@
+/* Admonition types beyond the Material defaults (contracts/page-conventions.md, sections 4 and 5).
+   important: must not be missed; experimental: labels for change requests (IMPORTANT tier);
+   caution: data loss, security exposure, or an irreversible change. */
+
+.md-typeset .admonition.important,
+.md-typeset details.important {
+  border-color: #1971c2;
+}
+.md-typeset .important > .admonition-title,
+.md-typeset .important > summary {
+  background-color: rgba(25, 113, 194, 0.1);
+}
+.md-typeset .important > .admonition-title::before,
+.md-typeset .important > summary::before {
+  background-color: #1971c2;
+  -webkit-mask-image: var(--md-admonition-icon--info);
+          mask-image: var(--md-admonition-icon--info);
+}
+
+.md-typeset .admonition.experimental,
+.md-typeset details.experimental {
+  border-color: #e8590c;
+}
+.md-typeset .experimental > .admonition-title,
+.md-typeset .experimental > summary {
+  background-color: rgba(232, 89, 12, 0.1);
+}
+.md-typeset .experimental > .admonition-title::before,
+.md-typeset .experimental > summary::before {
+  background-color: #e8590c;
+  -webkit-mask-image: var(--md-admonition-icon--example);
+          mask-image: var(--md-admonition-icon--example);
+}
+
+.md-typeset .admonition.caution,
+.md-typeset details.caution {
+  border-color: #c92a2a;
+}
+.md-typeset .caution > .admonition-title,
+.md-typeset .caution > summary {
+  background-color: rgba(201, 42, 42, 0.1);
+}
+.md-typeset .caution > .admonition-title::before,
+.md-typeset .caution > summary::before {
+  background-color: #c92a2a;
+  -webkit-mask-image: var(--md-admonition-icon--danger);
+          mask-image: var(--md-admonition-icon--danger);
+}
+
+/* make pdf (print-site page): a navigation section title shares its sheet with the
+   section's first page instead of standing alone on a page. */
+@media print {
+  section.md-section > section.print-page:first-of-type {
+    break-before: avoid !important;
+    page-break-before: avoid !important;
+  }
+}

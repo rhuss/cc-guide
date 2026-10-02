@@ -1,0 +1,17 @@
+# Three statements on the page are false at the pinned sources. The review must
+# report each as Critical or Important. `keywords` must all appear in one finding
+# entry (case-insensitive); a nested list means any one of the alternatives.
+planted:
+  - id: port
+    statement: "curl -s http://127.0.0.1:8080/status"
+    truth: "config/defaults.yaml sets server.port 9090"
+    keywords: ["8080", "9090"]
+  - id: timeout
+    statement: "requests time out after 60 seconds by default"
+    truth: "config/defaults.yaml sets timeout 30"
+    keywords: [["timeout", "time out"], "60", "30"]
+  - id: admin-ui
+    statement: "The admin UI is enabled by default"
+    truth: "config/defaults.yaml sets admin.enabled false"
+    keywords: [["admin ui", "admin-ui", "admin.enabled", "admin:"], ["enabled", "default"], ["false", "disabled", "off"]]
+difficulty: easy

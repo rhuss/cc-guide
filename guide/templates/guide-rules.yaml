@@ -1,0 +1,23 @@
+# Per-page content rules, checked by `make check` (tools/guide/check.py).
+# Each rule applies to the files matching `glob` (relative to the guide project root):
+#   require:        every regex must match somewhere in each file
+#   forbid:         no regex may match anywhere in each file
+#   require_order:  the first matches of these regexes must appear in this order
+# Page tasks add rules for their page before writing it, so the check fails first.
+rules:
+  - glob: "content/modules/ROOT/pages/index.adoc"
+    require:
+      - 'include::(ROOT:)?partial\$baseline-note\.adoc\[\]'
+      - 'xref:admin/'
+      - 'xref:user/'
+  - glob: "content/modules/ROOT/pages/admin/install.adoc"
+    require:
+      - '^Check:'
+      - '^\[WARNING\]'
+    require_order:
+      - 'git clone'
+      - 'git checkout \{[a-z0-9-]+-commit\}'
+      - 'make install'
+  - glob: "content/modules/ROOT/pages/user/*.adoc"
+    forbid:
+      - '\boc (login|get|exec|rsh|port-forward)\b'

@@ -1,0 +1,36 @@
+# Upstream state this guide was written against. Single source of truth for
+# every version, commit, and permalink in the guide (see README.md).
+captured: "2026-09-30"
+saw:
+  repo: https://github.com/validatedpatterns-sandbox/secure-agent-workspace
+  branch: main
+  commit: c84103d7eeb502a01930163d422051d5beb63432
+  openshell_version: 0.0.116-rhaiv.0
+  open_prs:
+    - number: 33
+      title: "feat(rhdh): add self-service sandbox portal with Tekton pipelines"
+      head: 21d3f325ab08d271ba00c03d2bb7b83aae343540
+    - number: 37
+      title: "feat(gpu): opt-in GPU passthrough for OpenShell agent sandbox"
+      head: 77c9a4d01b611ad501dc368c99a2274decde7cff
+    - number: 52
+      title: "feat(governance): switch between the governance interceptor and APF"
+      head: 9252ed76d0c7b7d05b3dbc49e55c95844f914c2a
+    - number: 53
+      title: "feat(bom): deliver versioned OpenClaw harness bundles via SAW-BOM"
+      head: fdf11f77db63b7d848894d628d8a675116c47c69
+    - number: 55
+      title: "Implements SPIFFE/SPIRE workload for agent identity"
+      head: 3b040d06c9cd9df989c57bdc96a65f415d4da733
+    - number: 56
+      title: "Upgrade OpenShell to v0.1.2-rhaiv.0"
+      head: e9f78b05a4a1bf7ad2c294b03374d439b1413226
+openshell:
+  repo: https://github.com/NVIDIA/OpenShell
+  branch: main
+  deployed:
+    tag: v0.0.116
+    commit: d1155aa70042d3e2ee49dbfa15346b108b7c1d92
+  upstream:
+    commit: 252882f37f2daa63ef4078b3bbb89adbcf43b409
+    latest_tag: v0.1.2

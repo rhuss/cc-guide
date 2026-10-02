@@ -1,0 +1,7 @@
+# Default configuration for minisvc.
+server:
+  port: 9090
+  bind: 127.0.0.1
+timeout: 30
+admin:
+  enabled: false
