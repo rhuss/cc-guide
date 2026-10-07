@@ -10,14 +10,22 @@
 // that arrive during a build queue exactly one follow-up build. browser-sync serves the
 // site and reloads the browser after every successful build (its client is injected
 // into responses served as text/html, which Antora's .html pages are).
-// Antora: the playbook comes from tools/guide/playbook.py, so a linked git worktree works too.
+// Antora: the playbook comes from tools/guide/playbook.py, so a linked git worktree works too,
+// and branding applies: the watcher also follows ui/ (which holds the overlay directory
+// ui/supplemental/), the branding/ directory, and the logo and favicon files named in
+// guide.yaml's branding block (re-read whenever guide.yaml changes, so newly named files
+// join the watch; FR-023). These paths may be missing when the preview starts: a
+// ui/supplemental/ or a logo file created while it runs also triggers a rebuild. A
+// branding problem fails the build like any other error and keeps the last good site;
+// branding warnings (an overlay file that shadows a generated one) are printed after a
+// successful build too.
 // MkDocs: `mkdocs build --strict` into the staging dir (mkdocs serve would stop or show a
 // broken page instead of keeping the last good site). The format is read from
 // tools/guide/adapter.yaml.
 import { createRequire } from 'node:module';
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { basename, dirname, join, resolve, sep } from 'node:path';
 
 const USAGE = 'usage: preview-watch.mjs [--internal] [--port N] [--no-open] [--root DIR]';
 
@@ -51,6 +59,12 @@ try {
 } catch (err) {
   console.error(`[preview] missing Node packages in ${root} (run npm install): ${err.message}`);
   process.exit(1);
+}
+let yaml = null;
+try {
+  yaml = require('js-yaml');
+} catch {
+  // Without js-yaml the logo and favicon paths are not watched; ui/ and branding/ still are.
 }
 
 const adapterFile = join(root, 'tools', 'guide', 'adapter.yaml');
@@ -114,7 +128,49 @@ async function buildOnce() {
   renameSync(staging, served);
   rmSync(old, { recursive: true, force: true });
   log(`build ok in ${seconds}s`);
+  // Branding warnings (tools/guide/playbook.py prints them to stderr), for example an
+  // overlay file that shadows a generated one (FR-020).
+  out.split('\n').filter((line) => line.includes(': warning: ')).forEach((line) => log(line.trim()));
   return true;
+}
+
+// The branding inputs of an Antora guide: ui/ (with the overlay directory
+// ui/supplemental/), the branding/ directory, and the logo and favicon files named in
+// guide.yaml, inside the guide project. Any of them may be missing.
+function brandingInputs() {
+  const found = ['ui', 'branding'].map((p) => join(root, p));
+  if (yaml) {
+    try {
+      const guide = yaml.load(readFileSync(join(root, 'guide.yaml'), 'utf8')) || {};
+      const block = guide.branding;
+      if (block && typeof block === 'object') {
+        for (const key of ['logo', 'favicon']) {
+          if (typeof block[key] === 'string' && block[key].trim()) found.push(resolve(root, block[key]));
+        }
+      }
+    } catch {
+      // An unreadable guide.yaml fails the next build, which reports it.
+    }
+  }
+  return found.filter((p) => p.startsWith(root + sep));
+}
+
+// How to watch the branding inputs. chokidar reports at most one missing entry per
+// directory, so missing inputs are not handed to it: an existing input is watched as is;
+// for a missing one, its topmost missing ancestor is found. When that sits in the guide
+// root, the root watcher (depth 0) reports it once it appears (rootNames); deeper down,
+// the nearest existing directory is watched as a whole.
+function watchPlan(inputs) {
+  const paths = [];
+  const rootNames = [];
+  for (const input of inputs) {
+    if (existsSync(input)) { paths.push(input); continue; }
+    let top = input;
+    while (!existsSync(dirname(top))) top = dirname(top);
+    if (dirname(top) === root) rootNames.push(basename(top));
+    else paths.push(dirname(top));
+  }
+  return { paths, rootNames };
 }
 
 let building = false;
@@ -158,12 +214,45 @@ async function main() {
   const watched = sources.concat(['baseline.yaml', 'guide.yaml'])
     .map((p) => join(root, p))
     .filter((p) => existsSync(p));
-  const watcher = chokidar.watch(watched, {
+  // Branding inputs (Antora): paths in the main watch, and root entries still missing.
+  const brandWatched = new Set();
+  const rootNames = new Set();
+  const planBranding = () => {
+    if (format !== 'antora') return [];
+    const plan = watchPlan(brandingInputs());
+    plan.rootNames.forEach((name) => rootNames.add(name));
+    const added = plan.paths.filter((p) => !brandWatched.has(p));
+    added.forEach((p) => brandWatched.add(p));
+    return added;
+  };
+  watched.push(...planBranding());
+  const options = {
     ignoreInitial: true,
     ignored: (p) => /(^|[/\\])(node_modules|build|\.git|\.guide)([/\\]|$)/.test(p.slice(root.length)),
     awaitWriteFinish: { stabilityThreshold: 100, pollInterval: 50 },
+  };
+  const watcher = chokidar.watch(watched, options);
+  watcher.on('all', (event, path) => {
+    // A changed guide.yaml may name new logo or favicon files.
+    if (path === join(root, 'guide.yaml')) {
+      const added = planBranding();
+      if (added.length) watcher.add(added);
+    }
+    schedule(event, path);
   });
-  watcher.on('all', (event, path) => schedule(event, path));
+  // Reports a missing branding input of the guide root (ui/, branding/, or the top
+  // directory of a named logo or favicon file) once it appears; it then joins the watch.
+  const rootWatcher = format === 'antora' ? chokidar.watch(root, { ...options, depth: 0 }) : null;
+  if (rootWatcher) {
+    rootWatcher.on('all', (event, path) => {
+      if (dirname(path) !== root || !rootNames.has(basename(path))) return;
+      if ((event === 'add' || event === 'addDir') && !brandWatched.has(path)) {
+        brandWatched.add(path);
+        watcher.add(path);
+      }
+      schedule(event, path);
+    });
+  }
   if (pending) trigger();
 
   bs = browserSync.create('guide-preview');
@@ -184,7 +273,8 @@ async function main() {
   const stop = () => {
     log('stopping');
     stopBuild();
-    watcher.close().finally(() => { bs.exit(); process.exit(0); });
+    Promise.allSettled([watcher.close(), rootWatcher && rootWatcher.close()])
+      .finally(() => { bs.exit(); process.exit(0); });
   };
   process.on('SIGINT', stop);
   process.on('SIGTERM', stop);

@@ -17,6 +17,9 @@ Usage:
         <!-- guide:attr NAME -->VALUE<!-- /guide:attr -->
       without --write, lists stale regions and exits 1 when any is stale;
       with --write, rewrites them in place. An unknown NAME always exits 1.
+      A branding problem in guide.yaml (tools/guide/branding.py; the gfm adapter
+      supports no branding key) exits 1 before any region is read or written, which
+      stops the gfm `site` targets that run this first.
 """
 from __future__ import annotations
 
@@ -27,6 +30,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+import branding
 import guidecfg
 
 
@@ -129,6 +133,11 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--root", type=Path, default=Path("."))
     r.add_argument("dirs", nargs="*")
     args = parser.parse_args(argv)
+    if args.cmd == "regions":
+        problems, _ = branding.check_guide(args.root)
+        if problems:
+            print("\n".join(problems), file=sys.stderr)
+            return 1
     try:
         baseline = guidecfg.load_baseline(args.root)
     except guidecfg.ConfigError as err:

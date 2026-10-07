@@ -56,6 +56,39 @@ def test_toolkit_only_refresh(tmp_path):
     assert page.read_text() == "= Edited by the author\n"  # content untouched
 
 
+def test_antora_scaffold_vendors_branding_assets(tmp_path):
+    plugin = plugin_copy(tmp_path)
+    guide = tmp_path / "g"
+    assert run(plugin / "scripts/scaffold-project.sh", "--format", "antora", "--title", "T", guide).returncode == 0
+    branding = guide / "tools" / "guide" / "branding"
+    assert (branding / "contract.yaml").read_text() == (plugin / "adapters/antora/branding/contract.yaml").read_text()
+    assert (branding / "logo-text.svg.tmpl").read_text() == \
+        (plugin / "adapters/antora/branding/logo-text.svg.tmpl").read_text()
+    assert (branding / "NOTICE.md").is_file()
+
+
+def test_toolkit_only_refresh_restores_branding_assets(tmp_path):
+    plugin = plugin_copy(tmp_path)
+    guide = tmp_path / "g"
+    assert run(plugin / "scripts/scaffold-project.sh", "--format", "antora", "--title", "T", guide).returncode == 0
+    branding = guide / "tools" / "guide" / "branding"
+    shutil.rmtree(branding)
+    contract = plugin / "adapters" / "antora" / "branding" / "contract.yaml"
+    contract.write_text(contract.read_text() + "# changed in the plugin\n")
+    proc = run(plugin / "scripts/scaffold-project.sh", "--format", "antora", "--toolkit-only", guide)
+    assert proc.returncode == 0, proc.stderr
+    assert (branding / "logo-text.svg.tmpl").is_file()
+    assert (branding / "contract.yaml").read_text().endswith("# changed in the plugin\n")
+
+
+def test_gfm_scaffold_has_no_branding_assets(tmp_path):
+    plugin = plugin_copy(tmp_path)
+    guide = tmp_path / "g"
+    assert run(plugin / "scripts/scaffold-project.sh", "--format", "gfm", "--title", "T", guide).returncode == 0
+    assert (guide / "tools" / "guide" / "adapter.yaml").is_file()
+    assert not (guide / "tools" / "guide" / "branding").exists()
+
+
 def test_unknown_format(tmp_path):
     proc = run(REPO / "guide/scripts/scaffold-project.sh", "--format", "hugo", "--title", "T", tmp_path / "g")
     assert proc.returncode == 2 and "unknown format" in proc.stderr

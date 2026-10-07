@@ -113,3 +113,24 @@ def test_regions_cli(render_fixture_guide):
     (root / "docs" / "bad.md").write_text("<!-- guide:attr nope -->x<!-- /guide:attr -->\n")
     bad = subprocess.run(cmd, capture_output=True, text=True)
     assert bad.returncode == 1 and "nope" in bad.stderr
+
+
+def test_regions_stop_on_branding_block(render_fixture_guide):
+    # FR-009, FR-010: the gfm build runs `attrs.py regions --write` first; a branding block
+    # (which the gfm adapter does not support) stops it before any page is rewritten.
+    root = render_fixture_guide
+    tools = root / "tools" / "guide"
+    tools.mkdir(parents=True)
+    adapters = Path(__file__).resolve().parents[2] / "guide" / "adapters"
+    (tools / "adapter.yaml").write_text((adapters / "gfm" / "adapter.yaml").read_text())
+    data = yaml.safe_load((root / "guide.yaml").read_text())
+    data.update(format="gfm", branding={"logo_text": "Kits"})
+    (root / "guide.yaml").write_text(yaml.safe_dump(data, sort_keys=False))
+    (root / "docs").mkdir()
+    page = root / "docs" / "index.md"
+    page.write_text(REGION_PAGE)
+    proc = subprocess.run([sys.executable, str(TOOLKIT / "attrs.py"), "regions", "--write", "--root", str(root),
+                           "docs"], capture_output=True, text=True)
+    assert proc.returncode == 1
+    assert "guide.yaml:branding.logo_text: not supported by the gfm adapter" in proc.stderr
+    assert page.read_text() == REGION_PAGE

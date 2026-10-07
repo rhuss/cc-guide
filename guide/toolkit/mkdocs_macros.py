@@ -10,7 +10,9 @@ syntax in listings ({{ .Values.x }}, {% if %}, ${#array[@]}) never reaches Jinja
 
 attr() fails the build on an unknown name, so a missing baseline value cannot slip
 through (FR-018). The values come from tools/guide/attrs.py, the same code the other
-adapters use.
+adapters use. define_env also stops the build when guide.yaml has a branding block,
+which the MkDocs adapter does not support (tools/guide/branding.py); every `mkdocs
+build` (site, site-internal, check, preview) loads this module.
 """
 from __future__ import annotations
 
@@ -20,6 +22,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import attrs  # noqa: E402
+import branding  # noqa: E402
 import guidecfg  # noqa: E402
 
 TIERS = {
@@ -49,6 +52,9 @@ def label(tier: str, feature: str, pr: int | str, baseline: guidecfg.Baseline, c
 
 def define_env(env) -> None:
     root = Path(env.project_dir)
+    problems, _ = branding.check_guide(root)
+    if problems:
+        raise ValueError("guide.yaml branding problems:\n" + "\n".join(problems))
     baseline = guidecfg.load_baseline(root)
     values = attrs.values(baseline)
 

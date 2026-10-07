@@ -12,6 +12,15 @@
 // inside the document, applies print CSS, and prints with page numbers in the footer
 // (and INTERNAL in every footer for the internal view).
 //
+// Branded guides (a `branding` block in guide.yaml, Antora only): the title page starts
+// with the guide's logo on a band in the site header's color (#151515), so a logo made
+// for the dark header stays legible (FR-025). The logo comes from the rendered branding
+// output, build/branding/<view>/branding.json and the logo file it names (written by
+// tools/guide/playbook.py during the site build), and is embedded as a base64 data URL
+// in an <img>, never as markup (FR-026). Without that output the print stops with
+// "branding output missing for the <view> view; run make check". Without a branding
+// block the title page is unchanged (FR-027).
+//
 // Page detection: --page-heading selects the heading that starts each guide page and
 // --section-heading the navigation section headings. Without them the Antora
 // html-single structure is detected (section = .sect1 > h2, page = .sect2 > h3);
@@ -124,6 +133,13 @@ img { max-width: 100% !important; height: auto !important; break-inside: avoid; 
 .guide-sources { list-style: none; padding: 0; margin: 0; font-size: 9.5pt; }
 .guide-sources li { padding: 2mm 0; border-bottom: 1px solid #dee2e6; overflow-wrap: anywhere; }
 .guide-title-page code { font-size: 9pt; }
+/* Branded title page: the logo on a band in the site header's color. The generic img rule
+   above sets height: auto !important and would stretch the logo to the page width, so the
+   band rule needs !important too; max-width keeps a long logo inside the content width
+   (the SVG keeps its aspect ratio inside the box). */
+.guide-title-page.guide-branded { padding-top: 0; }
+.guide-brand-band { display: block; width: 100%; box-sizing: border-box; background: #151515 !important; padding: 6mm 8mm; margin: 0 0 50mm 0; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+.guide-brand-band img { display: block; height: 14mm !important; width: auto !important; max-width: 100% !important; }
 .guide-internal-banner { margin-top: 10mm; padding: 4mm; border: 2px solid #c92a2a; color: #c92a2a; font-weight: bold; }
 .guide-toc { break-after: page; font-family: Helvetica, Arial, sans-serif; }
 .guide-toc h2 { font-size: 18pt; }
@@ -232,10 +248,13 @@ function transformDocument(args) {
   // Title page and table of contents.
   const meta = args.meta;
   const titlePage = doc.createElement('section');
-  titlePage.className = 'guide-title-page';
+  titlePage.className = meta.brand ? 'guide-title-page guide-branded' : 'guide-title-page';
+  // meta.brand.src is a base64 data URL and meta.brand.alt is already escaped.
+  const band = meta.brand
+    ? `<div class="guide-brand-band"><img src="${meta.brand.src}" alt="${meta.brand.alt}"></div>` : '';
   const rows = meta.sources.map((s) => `<li><strong>${s.id}</strong>${s.ref ? ` (ref ${s.ref})` : ''}`
     + `<br><a href="${s.url}">${s.url}</a><br>commit <code>${s.commit}</code></li>`).join('');
-  titlePage.innerHTML = `<h1>${meta.title}</h1>`
+  titlePage.innerHTML = `${band}<h1>${meta.title}</h1>`
     + `<div class="guide-baseline">Verified against the baseline captured on ${meta.captured}</div>`
     + `<div class="guide-sources-label">Pinned sources</div><ul class="guide-sources">${rows}</ul>`
     + (meta.internal ? '<div class="guide-internal-banner">INTERNAL: this document includes the internal part of the guide. '
@@ -279,6 +298,20 @@ function transformDocument(args) {
   return { errors, pages: pages.length, links, rewritten, titles: pages.map((h) => h.textContent.trim()) };
 }
 
+// The rendered logo and alt text of a branded guide (build/branding/<view>/branding.json).
+function readBrand(root, view) {
+  const missing = new Error(`branding output missing for the ${view} view; run make check`);
+  let info;
+  try {
+    info = JSON.parse(readFileSync(join(root, 'build', 'branding', view, 'branding.json'), 'utf8'));
+  } catch {
+    throw missing;
+  }
+  if (!info || typeof info.logo !== 'string' || !existsSync(info.logo)) throw missing;
+  const data = readFileSync(info.logo).toString('base64');
+  return { src: `data:image/svg+xml;base64,${data}`, alt: escapeHtml(info.alt || '') };
+}
+
 async function main() {
   const opts = parseArgs(process.argv.slice(2));
   const root = resolve(opts.root);
@@ -301,6 +334,7 @@ async function main() {
   const title = String(guide.title || 'Guide');
   const captured = baseline.captured instanceof Date ? baseline.captured.toISOString().slice(0, 10) : String(baseline.captured || '');
   const meta = {
+    brand: guide.branding == null ? null : readBrand(root, opts.view),
     title: escapeHtml(title),
     captured: escapeHtml(captured),
     internal,
@@ -331,9 +365,20 @@ async function main() {
       if (!opts.allowBrokenLinks || result.pages === 0) throw new Error(`the print document has problems:\n${msg}`);
       console.error(`warning: ${result.errors.length} link problem(s):\n${msg}`);
     }
+    // Images the transform inserted (the branded logo, a data URL) load asynchronously:
+    // wait for every pending image to load or fail (at most 15 s) before judging them.
+    await page.evaluate(() => Promise.race([
+      Promise.all(Array.from(document.images).filter((i) => !i.complete).map((i) => new Promise((done) => {
+        i.addEventListener('load', done, { once: true });
+        i.addEventListener('error', done, { once: true });
+      }))),
+      new Promise((done) => setTimeout(done, 15000)),
+    ]));
     const broken = await page.evaluate(() => Array.from(document.images)
       .filter((i) => !i.complete || i.naturalWidth === 0).map((i) => i.getAttribute('src')));
-    if (broken.length) throw new Error(`images failed to load: ${broken.join(', ')}`);
+    // A data URL (the branded logo) is shortened: the message must not dump the file.
+    const shown = broken.map((src) => (src && src.startsWith('data:') ? `${src.slice(0, 40)}...` : src));
+    if (broken.length) throw new Error(`images failed to load: ${shown.join(', ')}`);
     await page.emulateMedia({ media: 'print' });
     const label = escapeHtml(title) + (internal ? ' &middot; INTERNAL: do not share outside the internal audience' : '');
     await page.pdf({

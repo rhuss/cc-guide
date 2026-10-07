@@ -1,6 +1,6 @@
 # Output adapters
 
-An adapter turns the format-neutral guide model into one output format. Each lives in `guide/adapters/<format>/` as a descriptor (`adapter.yaml`, copied into a guide project as `tools/guide/adapter.yaml`) and a scaffold (copied by `/guide:create` through `scripts/scaffold-project.sh`). Skills never call format tools directly; they run the guide project's `make` targets, which every adapter provides with the same names and meaning (`specs/001-cc-guide-plugin/contracts/adapter.md`).
+An adapter turns the format-neutral guide model into one output format. Each lives in `guide/adapters/<format>/` as a descriptor (`adapter.yaml`, copied into a guide project as `tools/guide/adapter.yaml`) and a scaffold (copied by `/guide:create` through `scripts/scaffold-project.sh`). The descriptor's `branding` list names the branding keys the adapter supports. An optional `branding/` directory (the Antora logo template and UI bundle contract) is vendored next to the toolkit as `tools/guide/branding/`. Skills never call format tools directly; they run the guide project's `make` targets, which every adapter provides with the same names and meaning (`specs/001-cc-guide-plugin/contracts/adapter.md`).
 
 ## Capabilities
 
@@ -16,6 +16,7 @@ An adapter turns the format-neutral guide model into one output format. Each liv
 | Preview | `tools/guide/preview-watch.mjs` (debounce, queue, last good site, reload) | the same watcher with `mkdocs build --strict` | `markserv` (no build, so nothing can break) |
 | Print HTML for the PDF | html-single export `build/site/guide/_exports/index.html` | print-site page `build/site/print_page.html` | Pandoc assembly in `docs/SUMMARY.md` order |
 | Linked git worktrees | generated playbooks (`tools/guide/playbook.py`) | works as is | works as is |
+| Branding (`guide.yaml` `branding`) | all six keys: `logo_text`, `logo`, `logo_alt`, `footer`, `favicon`, `color`, plus the overlay directory `ui/supplemental/` ([branding.md](branding.md)) | none (a branding block fails validation) | none (a branding block fails validation) |
 
 ## Make targets
 

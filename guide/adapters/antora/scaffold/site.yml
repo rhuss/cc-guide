@@ -1,6 +1,7 @@
 # Shareable view: the content component only (never the internal part).
-# Built with `make site`; inside a linked git worktree the Makefile builds from the
-# playbook that tools/guide/playbook.py generates from this file instead.
+# Built with `make site`. For a branded guide (guide.yaml `branding`), a guide with
+# ui/supplemental/, or inside a linked git worktree, the Makefile builds from the
+# playbook that tools/guide/playbook.py generates from this file instead (build/).
 site:
   title: "{{TITLE}}"
   start_page: guide::index.adoc
@@ -18,7 +19,7 @@ antora:
   # One standalone HTML document per view, the input of make pdf. The inline config
   # selects the built-in Asciidoctor.js converter (no Ruby asciidoctor needed); it is
   # inline rather than in antora-assembler.yml so it also applies to the playbooks
-  # generated for linked worktrees under build/.
+  # generated under build/ (branding, ui/supplemental/, linked worktrees).
   - require: "@antora/html-single-extension"
     config_source:
       build:

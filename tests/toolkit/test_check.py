@@ -18,6 +18,7 @@ content_root: content
 internal_root: internal
 page_glob: "modules/*/pages/**/*.adoc"
 comment: line
+branding: [logo_text, logo, logo_alt, footer, favicon, color]
 """
 
 MKDOCS_ADAPTER = """format: mkdocs
@@ -343,3 +344,194 @@ def test_links_inside_nested_fences_are_not_checked(tmp_path):
         "[real](missing-after-fence.md)\n")
     v = check.check_pages(root, guidecfg.load_guide(root), guidecfg.load_baseline(root))
     assert [x.message for x in v if x.rule == "broken-link"] == ["missing-after-fence.md does not exist"]
+
+
+# --- branded-site check (FR-032, T032) ----------------------------------------------
+
+
+def page_html(logo: str = "../_/img/logo-guide.svg", alt: str = "Red Hat Agent Starter Kits",
+              footer: str = '<footer class="footer"><p class="guide-footer">Kits</p></footer>',
+              body: str = "<p>Content</p>", header: bool = True) -> str:
+    img = f'<img src="{logo}" alt="{alt}" class="navbar-logo-img">' if header else ""
+    return (f'<!DOCTYPE html><html><body><header class="header"><nav class="navbar">{img}'
+            f'<a class="navbar-item site-title">minisvc guide</a></nav></header>'
+            f'<main>{body}</main>{footer}</body></html>')
+
+
+@pytest.fixture
+def branded_site(antora):
+    def setup(block=None, pages=None, views=("site", "site-internal")):
+        path = antora / "guide.yaml"
+        data = yaml.safe_load(path.read_text())
+        data["branding"] = block or {"logo_text": "Agent Starter Kits"}
+        path.write_text(yaml.safe_dump(data, sort_keys=False))
+        for view in views:
+            for rel, html in (pages or {"guide/index.html": page_html()}).items():
+                write(antora, f"build/{view}/{rel}", html)
+        return antora
+    return setup
+
+
+def site_check(root):
+    return check.check_branded_site(root, guidecfg.load_guide(root))
+
+
+def test_branded_site_passes(branded_site):
+    root = branded_site(pages={"guide/index.html": page_html(),
+                               "guide/user/start.html": page_html(logo="../../_/img/logo-guide.svg"),
+                               "index.html": page_html(header=False, footer="")})
+    assert site_check(root) == []
+
+
+def test_stock_logo_fails(branded_site):
+    root = branded_site(pages={"guide/index.html": page_html(),
+                               "guide/user/start.html": page_html(logo="../../_/img/logo-demo-platform.svg")})
+    (v1, v2) = site_check(root)
+    assert {v1.path, v2.path} == {"build/site/guide/user/start.html", "build/site-internal/guide/user/start.html"}
+    assert v1.line == 0 and v1.rule == "branding"
+    assert str(v1).startswith(f"{v1.path}:0: [branding] header does not show the branded logo")
+    assert "logo-demo-platform.svg" in v1.message
+
+
+def test_wrong_alt_fails(branded_site):
+    root = branded_site(pages={"guide/index.html": page_html(alt="Red Hat Demo Platform")}, views=("site",))
+    violations = site_check(root)
+    assert [v.message.split(" (")[0] for v in violations] == [
+        "header does not show the branded logo", "no page shows the branded logo"]
+
+
+def test_no_header_at_all_fails(branded_site):
+    root = branded_site(pages={"guide/index.html": page_html(header=False)}, views=("site",))
+    (v,) = site_check(root)
+    assert str(v) == "build/site:0: [branding] no page shows the branded logo"
+
+
+def test_exports_are_ignored(branded_site):
+    root = branded_site(pages={"guide/index.html": page_html(),
+                               "guide/_exports/index.html": page_html(header=False,
+                                                                      footer='<footer class="footer">demo.redhat.com</footer>')})
+    assert site_check(root) == []
+
+
+@pytest.mark.parametrize("footer", ["none", {"text": "Kits", "url": "https://example.com"}])
+def test_demo_platform_footer_fails_unless_rhdp(branded_site, footer):
+    stock = '<footer class="footer"><a href="https://demo.redhat.com" class="poweredBy"><p>Powered by</p></a></footer>'
+    root = branded_site(block={"logo_text": "Agent Starter Kits", "footer": footer},
+                        pages={"guide/index.html": page_html(footer=stock)}, views=("site",))
+    (v,) = site_check(root)
+    assert str(v) == "build/site/guide/index.html:0: [branding] Red Hat Demo Platform notice still present"
+
+
+def test_demo_platform_footer_passes_with_rhdp(branded_site):
+    stock = '<footer class="footer"><a href="https://demo.redhat.com" class="poweredBy"><p>Powered by</p></a></footer>'
+    root = branded_site(block={"logo_text": "Agent Starter Kits", "footer": "rhdp"},
+                        pages={"guide/index.html": page_html(footer=stock)})
+    assert site_check(root) == []
+
+
+def test_demo_platform_in_content_passes(branded_site):
+    root = branded_site(pages={"guide/index.html": page_html(body="<p>Labs run on the Red Hat Demo Platform.</p>")})
+    assert site_check(root) == []
+
+
+def test_unbranded_guide_and_missing_views_are_skipped(antora):
+    write(antora, "build/site/guide/index.html", page_html(logo="../_/img/logo-demo-platform.svg"))
+    assert site_check(antora) == []                 # no branding block
+    path = antora / "guide.yaml"
+    data = yaml.safe_load(path.read_text())
+    data["branding"] = {"logo_text": "Agent Starter Kits"}
+    path.write_text(yaml.safe_dump(data, sort_keys=False))
+    (antora / "build" / "site" / "guide" / "index.html").unlink()
+    assert site_check(antora) == []                 # build/site has no page, build/site-internal is missing
+
+
+def test_check_pages_runs_the_branded_site_check(branded_site):
+    root = branded_site(pages={"guide/index.html": page_html(logo="../_/img/logo-demo-platform.svg")}, views=("site",))
+    write(root, f"{PAGES}/install.adoc", GOOD_ADOC)
+    assert "branding" in rules(run(root))
+
+
+STOCK_FOOTER = ('<footer class="footer"><a href="https://demo.redhat.com" target="_blank" class="poweredBy">'
+                '<p>Powered by</p></a></footer>')
+
+
+def test_notice_only_in_the_internal_view_fails(branded_site):
+    root = branded_site(pages={"guide/index.html": page_html()})
+    write(root, "build/site-internal/guide/index.html", page_html(footer=STOCK_FOOTER))
+    (v,) = site_check(root)
+    assert str(v) == "build/site-internal/guide/index.html:0: [branding] Red Hat Demo Platform notice still present"
+
+
+def test_custom_footer_may_name_the_demo_platform(branded_site):
+    # FR-005 allows any footer text; only the stock notice fails (FR-032).
+    footer = ('<footer class="footer"><p class="guide-footer"><a href="https://demo.redhat.com/catalog">'
+              'Order this lab on Red Hat Demo Platform</a></p></footer>')
+    root = branded_site(block={"logo_text": "Agent Starter Kits",
+                               "footer": {"text": "Order this lab on Red Hat Demo Platform",
+                                          "url": "https://demo.redhat.com/catalog"}},
+                        pages={"guide/index.html": page_html(footer=footer)})
+    assert site_check(root) == []
+
+
+def test_foreign_footer_naming_the_demo_platform_fails(branded_site):
+    # A replaced UI bundle that ignores the overlay renders its own footer.
+    footer = '<footer class="footer"><p>Powered by Red Hat Demo Platform</p></footer>'
+    root = branded_site(pages={"guide/index.html": page_html(footer=footer)}, views=("site",))
+    (v,) = site_check(root)
+    assert v.message == "Red Hat Demo Platform notice still present"
+
+
+def test_own_footer_partial_may_name_the_demo_platform(branded_site):
+    root = branded_site(pages={"guide/index.html": page_html(
+        footer='<footer class="footer"><p>Runs on the Red Hat Demo Platform</p></footer>')})
+    write(root, "ui/supplemental/partials/footer-content.hbs", '<footer class="footer"><p>mine</p></footer>\n')
+    assert site_check(root) == []
+    write(root, "build/site/guide/index.html", page_html(footer=STOCK_FOOTER))
+    assert [v.path for v in site_check(root)] == ["build/site/guide/index.html"]
+
+
+def test_own_alt_helper_checks_only_the_logo(branded_site):
+    root = branded_site(pages={"guide/index.html": page_html(alt="My own alt text")})
+    assert [v.message.split(" (")[0] for v in site_check(root)][:1] == ["header does not show the branded logo"]
+    write(root, "ui/supplemental/helpers/navbar-logo-alt.js", "module.exports = () => 'My own alt text'\n")
+    assert site_check(root) == []
+
+
+def test_disabled_internal_view_is_not_checked(branded_site):
+    # A build/site-internal left over from a time the internal part was enabled.
+    root = branded_site(pages={"guide/index.html": page_html()}, views=("site",))
+    write(root, "build/site-internal/guide/index.html",
+          page_html(logo="../_/img/logo-demo-platform.svg", footer=STOCK_FOOTER))
+    assert len(site_check(root)) == 3
+    path = root / "guide.yaml"
+    data = yaml.safe_load(path.read_text())
+    data["internal"]["enabled"] = False
+    path.write_text(yaml.safe_dump(data, sort_keys=False))
+    assert site_check(root) == []
+
+
+def test_invalid_branding_block_is_reported_not_raised(branded_site):
+    root = branded_site(block={"logo_text": "Agent Starter Kits", "color": "green"},
+                        pages={"guide/index.html": page_html()})
+    (v,) = site_check(root)
+    assert str(v) == "guide.yaml:0: [branding] branding.color: must be a #rrggbb color (got green)"
+
+
+def test_overlay_problem_names_the_overlay_entry(branded_site, tmp_path):
+    root = branded_site(pages={"guide/index.html": page_html()})
+    outside = tmp_path / "outside.css"
+    outside.write_text("a{}\n")
+    (root / "ui" / "supplemental").mkdir(parents=True)
+    (root / "ui" / "supplemental" / "x.css").symlink_to(outside)
+    (v,) = site_check(root)
+    assert str(v) == "ui/supplemental/x.css:0: [branding] links outside the guide project"
+
+
+def test_own_footer_partial_exempts_only_branded_pages(branded_site):
+    # A replaced bundle that ignores the overlay: neither its header nor its footer is
+    # the author's, so its footer naming the Demo Platform still fails.
+    foreign = '<footer class="footer"><p>Powered by Red Hat Demo Platform</p></footer>'
+    root = branded_site(pages={"guide/index.html": page_html(logo="../_/img/logo-other.svg", footer=foreign)},
+                        views=("site",))
+    write(root, "ui/supplemental/partials/footer-content.hbs", '<footer class="footer"><p>mine</p></footer>\n')
+    assert "Red Hat Demo Platform notice still present" in [v.message for v in site_check(root)]

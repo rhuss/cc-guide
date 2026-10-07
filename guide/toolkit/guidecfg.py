@@ -5,12 +5,17 @@
 # ///
 """Load and validate a guide project's configuration files.
 
-  guide.yaml     project configuration (format, personas, sections, internal part)
+  guide.yaml     project configuration (format, personas, sections, internal part,
+                 optional Antora branding block)
   baseline.yaml  pinned sources and change requests
   inputs.yaml    input register (references only, never raw content)
 
 Usage: uv run tools/guide/guidecfg.py validate [--root DIR]
-         exits 1 and prints one `file:key: message` line per problem
+         exits 1 and prints one `file:key: message` line per problem; the branding
+         block and the overlay directory ui/supplemental/ are checked by
+         tools/guide/branding.py (its lines name their own location, for example
+         `ui/supplemental:css/x.css: ...`), and its warnings print as
+         `location: warning: ...` without changing the exit status
        uv run tools/guide/guidecfg.py get KEY [--root DIR]
          prints one value: title, slug, format, rigor, internal.enabled,
          drift.schedule, or baseline.captured
@@ -26,6 +31,8 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+
+import branding
 
 FORMATS = ("antora", "mkdocs", "gfm")
 RIGORS = ("fast", "standard", "strict")
@@ -106,6 +113,11 @@ class Guide:
     extra_queries: list[str] = field(default_factory=list)
     drift_schedule: str = "off"
     upstream_target: str = "github"
+    # The raw guide.yaml `branding` block (None without one, or when it is not a mapping).
+    # load_guide does not check it: the checks live in branding.check_guide (run by
+    # validate and playbook.py), so `get` keeps working for an invalid block and the
+    # build reaches the step that reports it (FR-010).
+    branding: dict | None = None
 
     @property
     def slug(self) -> str:
@@ -203,6 +215,7 @@ class Adapter:
     attributes: str = ""
     preview_port: int = 8000
     image_dir: str = ""
+    branding: list[str] = field(default_factory=list)   # supported branding keys
     extra: dict[str, Any] = field(default_factory=dict)
 
 
@@ -300,7 +313,7 @@ class _Checker:
 # --- loaders ----------------------------------------------------------------
 
 GUIDE_KEYS = {"schema", "title", "format", "personas", "sections", "rigor", "internal",
-              "clusters", "validate", "drift", "upstream"}
+              "clusters", "validate", "drift", "upstream", "branding"}
 
 
 def load_adapter(root: Path, required: bool = True) -> Adapter | None:
@@ -316,6 +329,8 @@ def load_adapter(root: Path, required: bool = True) -> Adapter | None:
     extra = {k: v for k, v in data.items() if k not in known}
     if "format" not in kwargs:
         raise ConfigError(path, "format is required")
+    if not isinstance(kwargs.get("branding", []), list):
+        raise ConfigError(path, "branding must be a list of branding keys")
     return Adapter(**kwargs, extra=extra)
 
 
@@ -395,11 +410,15 @@ def load_guide(root: Path) -> Guide:
     upstream = c.mapping(data.get("upstream"), "upstream", {"target"})
     target = c.enum(upstream.get("target"), "upstream.target", ("github",), "github")
 
+    brand = data.get("branding")
+    if not isinstance(brand, dict):
+        brand = None   # reported by branding.check_guide, not here (see Guide.branding)
+
     c.raise_if_any()
     return Guide(root=root, schema=int(schema), title=title, format=fmt, personas=personas,
                  sections=sections, rigor=rigor, internal_enabled=c.boolean(internal.get("enabled"), "internal.enabled"),
                  confidential_terms=terms, confidential_patterns=patterns, clusters=clusters,
-                 extra_queries=extra, drift_schedule=schedule, upstream_target=target)
+                 extra_queries=extra, drift_schedule=schedule, upstream_target=target, branding=brand)
 
 
 def load_baseline(root: Path) -> Baseline:
@@ -587,14 +606,17 @@ def _unique(c: _Checker, key: str, ids: list[str]) -> None:
 # --- CLI --------------------------------------------------------------------
 
 
-def validate(root: Path) -> list[str]:
+def validate(root: Path) -> tuple[list[str], list[str]]:
+    """Problem and warning lines of guide.yaml, baseline.yaml, inputs.yaml, and the branding."""
     problems: list[str] = []
     for loader in (load_guide, load_baseline, load_inputs):
         try:
             loader(root)
         except ConfigError as err:
             problems.extend(err.lines())
-    return problems
+    brand_problems, warnings = branding.check_guide(root)
+    problems.extend(line for line in brand_problems if line not in problems)
+    return problems, warnings
 
 
 GET_KEYS = {
@@ -626,8 +648,8 @@ def main(argv: list[str] | None = None) -> int:
             print(err, file=sys.stderr)
             return 1
         return 0
-    problems = validate(args.root)
-    for line in problems:
+    problems, warnings = validate(args.root)
+    for line in problems + warnings:
         print(line)
     if problems:
         return 1

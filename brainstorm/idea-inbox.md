@@ -37,3 +37,30 @@ Ideas captured from code reviews for future brainstorming.
 - **Summary**: The shared Markdown link regex matches any `](path)`, slightly looser than the old check.py pattern.
 
 > Unifying the link syntax for check and drift removed a divergence; if stray `](...)` text produces false broken-link reports, add a stricter variant for the broken-link check.
+
+### guidecfg-branding-coupling
+
+- **Source**: deep-review
+- **Date**: 2026-10-07
+- **Reference**: 002-antora-branding
+- **Summary**: guidecfg imports the branding module at load time, and branding.py keeps its own guide.yaml and adapter.yaml readers.
+
+> The core loader now depends on a feature module while loader logic is duplicated with slightly different defaults; a lazy import in validate() and one shared reader would keep the dependency direction clean.
+
+### branding-facts-shared-with-node
+
+- **Source**: deep-review
+- **Date**: 2026-10-07
+- **Reference**: 002-antora-branding
+- **Summary**: print-pdf.mjs and preview-watch.mjs hard-code the branding output layout, the band color, and the path-valued keys that branding.py owns.
+
+> Publishing these facts from branding.py (for example a band color and an input list in branding.json, or a `branding.py paths` subcommand) would leave one source of truth when keys or layouts change.
+
+### one-build-guard-per-format
+
+- **Source**: deep-review
+- **Date**: 2026-10-07
+- **Reference**: 002-antora-branding
+- **Summary**: The FR-010 "validate before the generator runs" guard lives in three unrelated modules (playbook.py, mkdocs_macros.py, attrs.py regions).
+
+> Unchanged Makefiles force the design; a single `branding.guard(root)` helper and a table of hook points in docs/adapters.md would make a fourth adapter or entry point harder to forget.

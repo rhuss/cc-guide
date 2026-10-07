@@ -78,3 +78,17 @@ def test_label_does_not_link_local_repositories(render_fixture_guide):
     baseline = guidecfg.load_baseline(render_fixture_guide)
     text = mkdocs_macros.label("in-review", "Status history", 4, baseline, baseline.captured)
     assert "change request #4" in text and "](" not in text  # file:// repositories get no link
+
+
+def test_branding_block_stops_the_mkdocs_build(render_fixture_guide):
+    # FR-009, FR-010: MkDocs builds never call playbook.py; define_env stops them.
+    root = render_fixture_guide
+    tools = root / "tools" / "guide"
+    tools.mkdir(parents=True)
+    adapters = Path(__file__).resolve().parents[2] / "guide" / "adapters"
+    (tools / "adapter.yaml").write_text((adapters / "mkdocs" / "adapter.yaml").read_text())
+    data = yaml.safe_load((root / "guide.yaml").read_text())
+    data.update(format="mkdocs", branding={"logo_text": "Kits"})
+    (root / "guide.yaml").write_text(yaml.safe_dump(data, sort_keys=False))
+    with pytest.raises(ValueError, match="guide.yaml:branding.logo_text: not supported by the mkdocs adapter"):
+        mkdocs_macros.define_env(FakeEnv(root))

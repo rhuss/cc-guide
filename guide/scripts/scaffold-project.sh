@@ -5,8 +5,11 @@
 # Copies guide/adapters/<format>/scaffold/ into DIR (never overwriting existing
 # files), renders {{TITLE}}, and installs the toolkit as DIR/tools/guide/:
 # the toolkit scripts with VERSION, the adapter descriptor (adapter.yaml), the
-# templates the toolkit renders (templates/), and the validate allowlist
-# (readonly.yaml). --toolkit-only refreshes only tools/guide/ (used by evolve).
+# templates the toolkit renders (templates/), the validate allowlist
+# (readonly.yaml), and the adapter's branding assets (guide/adapters/<format>/branding/
+# as tools/guide/branding/, when the adapter has them: the logo template and the UI
+# bundle contract that tools/guide/branding.py reads). --toolkit-only refreshes only
+# tools/guide/ (used by evolve).
 set -euo pipefail
 
 usage() { echo "usage: scaffold-project.sh --format antora|mkdocs|gfm (--title TITLE | --toolkit-only) DIR" >&2; exit 2; }
@@ -70,5 +73,10 @@ for t in run-summary.md upstream-issue.md; do
   cp "$plugin/templates/$t" "$tools/templates/$t"
 done
 cp "$plugin/validate/readonly.yaml" "$tools/readonly.yaml" 2>/dev/null || true
+# Branding assets of the adapter (Antora only). The rsync --delete above removed any
+# earlier copy, so a refresh always matches the plugin.
+if [[ -d "$adapter/branding" ]]; then
+  rsync -a --exclude '__pycache__' "$adapter/branding/" "$tools/branding/"
+fi
 
 echo "toolkit $(cat "$tools/VERSION" 2>/dev/null || echo unknown) installed in $tools"

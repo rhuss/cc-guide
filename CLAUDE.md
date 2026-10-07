@@ -16,7 +16,7 @@ This repository holds the Claude Code plugin `guide` (in `guide/`), its tests (`
 ## Layout
 
 - `guide/toolkit/`: format-neutral Python (PEP 723, run with `uv run`) and Node scripts. Create copies it into each guide project as `tools/guide/`, so it must not import anything from outside its own directory.
-- `guide/adapters/<format>/`: `adapter.yaml` plus the scaffold copied into a new guide project.
+- `guide/adapters/<format>/`: `adapter.yaml` plus the scaffold copied into a new guide project, and an optional `branding/` directory (Antora: logo template, UI bundle contract, MPL-2.0 notice) that the scaffold script vendors to `tools/guide/branding/`.
 - `guide/skills/`, `guide/commands/`: the plugin behavior. Commands are thin wrappers around the skill of the same name.
 - `tests/toolkit/`: pytest for the toolkit. `tests/adapters/`: shell smoke tests per format. `tests/manual/`: recorded quickstart runs.
 

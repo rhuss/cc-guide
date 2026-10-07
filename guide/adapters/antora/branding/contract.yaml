@@ -1,0 +1,95 @@
+# Parts of the pinned RHDP showroom UI bundle that the branding overlay relies on
+# (specs/002-antora-branding/contracts/bundle-contract.md). Checked by
+#   uv run tools/guide/branding.py contract --bundle <ui-bundle.zip|dir>
+# Every rule names one part; a bundle that drops or changes it fails with the rule id.
+# Every rule requires its file to exist (`exists: true` marks a rule that checks only
+# that); contains (every string occurs), matches (every regular expression matches),
+# equals (the content equals the string after stripping leading and trailing whitespace
+# from both; the stock head-icons.hbs is indented). Other keys are rejected.
+# All strings were taken from the unpacked v2.0.3 bundle.
+bundle: https://github.com/rhpds/rhdp_showroom_theme/releases/download/v2.0.3/ui-bundle.zip
+rules:
+  # The header shows img/logo-<site.keys.navbarLogo>.svg and asks the alt helper for its
+  # alt text: the overlay ships img/logo-guide.svg and the generated playbook sets
+  # site.keys.navbar_logo: guide (Antora camelCases it to site.keys.navbarLogo).
+  - id: logo-lookup
+    file: partials/header-content.hbs
+    matches:
+      - 'img/logo-\{\{or site\.keys\.navbarLogo'
+      - 'navbar-logo-alt \(or site\.keys\.navbarLogo'
+      - 'class="navbar-logo-img"'
+  # The alt-text helper the overlay replaces with one that returns the configured text.
+  - id: alt-helper
+    file: helpers/navbar-logo-alt.js
+    exists: true
+  # The footer partial the overlay replaces for footer none and footer {text, url}.
+  # class="poweredBy" is the marker tools/guide/check.py uses to spot the stock notice.
+  - id: footer-partial
+    file: partials/footer-content.hbs
+    contains: ['<footer class="footer">', 'demo.redhat.com', 'class="poweredBy"']
+  # The include chain that renders the replaced partials on every page: both layouts
+  # include head, header, and footer; header.hbs includes header-content.hbs and
+  # footer.hbs includes footer-content.hbs.
+  - id: layout-includes
+    file: layouts/default.hbs
+    contains: ['{{> head ', '{{> header}}', '{{> footer}}']
+  - id: layout-404-includes
+    file: layouts/404.hbs
+    contains: ['{{> head ', '{{> header}}', '{{> footer}}']
+  - id: header-include
+    file: partials/header.hbs
+    contains: ['{{> header-content}}']
+  - id: footer-include
+    file: partials/footer.hbs
+    contains: ['{{> footer-content}}']
+  # head-meta renders after head-styles (which links css/site.css) and before head-icons,
+  # so stylesheets linked from the replaced head-meta load after site.css.
+  - id: head-order
+    file: partials/head.hbs
+    matches: ['head-styles\}\}[\s\S]*head-meta\}\}[\s\S]*head-icons\}\}']
+  - id: head-styles-site-css
+    file: partials/head-styles.hbs
+    contains: ['/css/site.css']
+  # The overlay replaces these two partials wholesale; their stock content is the
+  # favicon link only, which the replacements reproduce.
+  - id: head-meta-stock
+    file: partials/head-meta.hbs
+    equals: '<link rel="icon" href="{{uiRootPath}}/img/favicon.ico" type="image/x-icon">'
+  - id: head-icons-stock
+    file: partials/head-icons.hbs
+    equals: '<link rel="icon" href="{{{uiRootPath}}}/img/favicon.ico" type="image/x-icon">'
+  # Header logo sizing (scales by width) and the header background the PDF band copies.
+  - id: site-css
+    file: css/site.css
+    contains: ['.navbar-logo-img{height:2rem;width:auto}', '--navbar-background:var(--color-jet-70)', '--color-jet-70:#151515']
+  # The stock logo the logo_text template is derived from (logo-text.svg.tmpl).
+  - id: stock-logo
+    file: img/logo-demo-platform.svg
+    contains: ['viewBox="0 0 1080 178.739"', 'translate(308 149)', 'font-size="82"', '<tspan x="0" y="0">Demo Platform</tspan>']
+
+# The accent blue the color setting replaces, and its hover shade.
+accent_color: "#06c"
+accent_hover_color: "#004d99"
+# Rules of css/site.css that use the accent blue. Each entry is also a contract rule
+# (accent:<selector>): site.css must have a rule for the selector whose declarations
+# include accent_color. css/branding.css sets the property to the configured color.
+accent_selectors:
+  - {selector: '.doc a', property: color}
+  - {selector: '.toc .toc-menu a:hover', property: color}
+  - {selector: '.toc .toc-menu a.is-active', property: border-left-color}
+  - {selector: ':focus-visible', property: outline-color}
+  - {selector: '.skip-link', property: color}
+  - {selector: '#search-input:focus', property: border-color}
+# Rules that use the hover shade (accent:<selector>, with accent_hover_color); branding.css
+# sets the property to the hover shade of the configured color.
+accent_hover_selectors:
+  - {selector: '.doc a:hover', property: color}
+# Rules that follow an accent or hover rule in css/site.css with the same specificity and
+# override it (an unresolved link stays red on hover, the active table-of-contents entry
+# keeps its dark text on hover). css/branding.css loads after site.css, so it
+# restates them after its hover rules. Each entry is also a contract rule
+# (restore:<selector>): site.css must have a rule for the selector with this value.
+accent_restore_selectors:
+  - {selector: '.doc a.unresolved', property: color, value: '#e00'}
+  # The active table-of-contents entry keeps its dark text on hover.
+  - {selector: '.toc .toc-menu a.is-active', property: color, value: '#151515'}

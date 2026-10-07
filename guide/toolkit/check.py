@@ -10,6 +10,11 @@ typed versions and commits, source blocks (and their resolution at the pinned
 commits when .guide/cache exists), stubs (strict only), input references,
 confidential terms and links into the internal part on shareable pages, image
 alt texts with unquoted commas (AsciiDoc), and role=expand on Antora diagrams.
+For a branded Antora guide (a guide.yaml `branding` block), the built views
+(build/site, and build/site-internal while the internal part is enabled) must show
+the branded header logo with its alt text on every page, and no footer may still
+carry the Red Hat Demo Platform notice unless `footer` is `rhdp` (FR-032, rule
+`branding`).
 Per-guide rules come from the optional guide-rules.yaml:
 
   rules:
@@ -24,6 +29,7 @@ Exits 1 and prints `path:line: [rule] message` for every violation.
 from __future__ import annotations
 
 import argparse
+import html
 import os
 import re
 import sys
@@ -32,6 +38,7 @@ from pathlib import Path
 
 import yaml
 
+import branding
 import guidecfg
 import sources
 
@@ -335,6 +342,99 @@ def check_structure(root: Path, guide: guidecfg.Guide, adapter: guidecfg.Adapter
     return out
 
 
+IMG_TAG_RE = re.compile(r"<img\b[^>]*>", re.I)
+ATTR_RE = re.compile(r'\b([\w-]+)\s*=\s*"([^"]*)"')
+FOOTER_RE = re.compile(r'<footer\b[^>]*class="[^"]*\bfooter\b[^"]*"[^>]*>([\s\S]*?)</footer>', re.I)
+STOCK_NOTICE = ("demo.redhat.com", "Demo Platform")
+STOCK_NOTICE_MARKER = 'class="poweredBy"'          # the stock footer's link (contract rule footer-partial)
+GENERATED_FOOTER_MARKER = 'class="guide-footer"'   # the footer rendered from branding.footer
+
+
+def _stock_notice(footer: str, own_footer: bool) -> bool:
+    """True when the content of a footer element is the stock Red Hat Demo Platform notice.
+
+    The stock partial is recognized by its poweredBy link. Any other footer that names
+    the Demo Platform counts too (for example the footer of a replaced UI bundle), except
+    the one rendered from branding.footer and the author's own partials/footer-content.hbs
+    in ui/supplemental/ (own_footer, passed only for a page whose header shows the branded
+    logo, so the overlay demonstrably applied): both may mention the Demo Platform.
+    """
+    if STOCK_NOTICE_MARKER in footer:
+        return True
+    if own_footer or GENERATED_FOOTER_MARKER in footer:
+        return False
+    return any(notice in footer for notice in STOCK_NOTICE)
+
+
+def _branding_problem(loc: str, msg: str) -> Violation:
+    """A branding problem as a violation of the file it names (guide.yaml, site.yml,
+    or the ui/supplemental/ entry)."""
+    if loc == branding.OVERLAY or loc.startswith(branding.OVERLAY + ":"):
+        rel = loc[len(branding.OVERLAY) + 1:]
+        return Violation(f"{branding.OVERLAY}/{rel}" if rel else branding.OVERLAY, 0, "branding", msg)
+    file, _, key = loc.partition(":")
+    return Violation(file, 0, "branding", f"{key}: {msg}" if key else msg)
+
+
+def check_branded_site(root: Path, guide: guidecfg.Guide) -> list[Violation]:
+    """Built views of a branded guide that do not show the branding (FR-032).
+
+    Every page with a header logo (img.navbar-logo-img) must show img/logo-guide.svg
+    with the configured alt text (any alt text when ui/supplemental/ has its own
+    helpers/navbar-logo-alt.js); a view where no page does (for example a replaced UI
+    bundle that ignores the overlay) fails; unless footer is rhdp, no footer element may
+    be the Red Hat Demo Platform notice (_stock_notice). Page content is not inspected,
+    and pages under _exports/ (the print export) are skipped, as are views that were not
+    built and the internal view while the internal part is disabled (its build/
+    directory is then a leftover). An invalid branding block is reported as is, since
+    the built views cannot be judged against it.
+    """
+    root = Path(root)
+    if not isinstance(guide.branding, dict):
+        return []
+    raw, fmt = branding.load_block(root)
+    problems, _ = branding.check(root, raw, fmt, branding.adapter_keys(root, fmt))
+    if problems:
+        return [_branding_problem(loc, msg) for loc, msg in problems]
+    brand = branding.resolve(root, guide.branding)
+    overlay = set(branding.overlay_files(root))
+    own_alt = branding.ALT_HELPER in overlay
+    own_footer = branding.FOOTER_PARTIAL in overlay
+    views = ("site", "site-internal") if guide.internal_enabled else ("site",)
+    out: list[Violation] = []
+    for view in views:
+        base = root / "build" / view
+        pages = sorted(p for p in base.rglob("*.html") if "_exports" not in p.relative_to(base).parts) \
+            if base.is_dir() else []
+        if not pages:
+            continue
+        shown = 0
+        for page in pages:
+            rel = f"build/{view}/{page.relative_to(base).as_posix()}"
+            text = page.read_text(errors="replace")
+            branded = False
+            for tag in IMG_TAG_RE.findall(text):
+                attrs = dict(ATTR_RE.findall(tag))
+                if "navbar-logo-img" not in attrs.get("class", "").split():
+                    continue
+                src, alt = attrs.get("src", ""), html.unescape(attrs.get("alt", ""))
+                if src.endswith(branding.LOGO_FILE) and (own_alt or alt == brand.alt):
+                    shown += 1
+                    branded = True
+                else:
+                    out.append(Violation(rel, 0, "branding",
+                                         f"header does not show the branded logo (found {src}, alt {alt!r})"))
+                break
+            if brand.footer != "rhdp":
+                for footer in FOOTER_RE.findall(text):
+                    if _stock_notice(footer, own_footer and branded):
+                        out.append(Violation(rel, 0, "branding", "Red Hat Demo Platform notice still present"))
+                        break
+        if not shown:
+            out.append(Violation(f"build/{view}", 0, "branding", "no page shows the branded logo"))
+    return out
+
+
 def check_pages(root: Path, guide: guidecfg.Guide, baseline: guidecfg.Baseline,
                 strict: bool = False, structure: bool = False) -> list[Violation]:
     """All content-check violations of a guide project."""
@@ -447,6 +547,8 @@ def check_pages(root: Path, guide: guidecfg.Guide, baseline: guidecfg.Baseline,
                 out.append(Violation(_rel(f, root), n, "dash", "em dash or en dash character; rephrase"))
 
     out.extend(_check_rules(root))
+    if adapter.format == "antora" and guide.branding is not None:
+        out.extend(check_branded_site(root, guide))
     if structure:
         out.extend(check_structure(root, guide, adapter))
     return out

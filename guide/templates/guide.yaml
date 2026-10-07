@@ -67,3 +67,19 @@ drift:
 
 upstream:
   target: github
+
+# Branding (antora format only; MkDocs and gfm guides fail validation with this block).
+# Without it the guide keeps the stock Red Hat Demo Platform look. Set exactly one of
+# logo_text or logo. logo_text renders the Red Hat logo (the Red Hat hat, a divider,
+# and the text) and is meant for guides about Red Hat products; a guide about another
+# product uses its own SVG logo (logo, with logo_alt). Paths are relative to the guide
+# root, for example files in branding/. The accent color and the overlay directory
+# ui/supplemental/ are described in the plugin's docs/branding.md.
+# branding:
+#   logo_text: Agent Starter Kits        # or: logo: branding/logo.svg (then logo_alt is required)
+#   logo_alt: Red Hat Agent Starter Kits # optional with logo_text (default "Red Hat <logo_text>")
+#   footer:                              # rhdp | none | {text, url}; default none
+#     text: Agent Starter Kits on GitHub
+#     url: https://github.com/red-hat-data-services/agentic-starter-kits
+#   favicon: branding/favicon.png        # optional: .ico, .png, .svg
+#   color: "#3e8635"                     # optional accent color; quote it (# starts a YAML comment)

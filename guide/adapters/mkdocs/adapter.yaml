@@ -43,3 +43,7 @@ experimental:
 attributes: mkdocs-macros
 
 preview_port: 8000
+
+# Branding keys this adapter supports (specs/002-antora-branding/data-model.md, adapter
+# branding capability): none, so a guide.yaml `branding` block fails validation.
+branding: []

@@ -9,6 +9,7 @@ Evidence for the final verification gate. Automated suites run with `make valida
 | [us2-evolve.md](us2-evolve.md) | 6 and 7 | drift check and SAW adoption/drift run; session parts open |
 | [us5-upstream.md](us5-upstream.md) | 8 | procedure; needs a throwaway GitHub repository |
 | [us6-validate.md](us6-validate.md) | 9 | procedure; needs cluster connections |
+| [002-antora-branding.md](002-antora-branding.md) | feature 002 quickstart 1 to 4 (Antora branding) | run; create and evolve session parts open |
 
 ## Automated suites (2026-10-01, macOS, Node 26, uv 0.8, Pandoc 3.11)
 

@@ -1,3 +1,4 @@
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -196,3 +197,111 @@ def test_pages_by_view(tmp_guide):
     assert rels("internal") == ["docs/internal/n.md"]
     assert len(rels("all")) == 3
     assert guidecfg.is_internal(tmp_guide / "docs/internal/n.md", tmp_guide, adapter)
+
+
+# --- branding (specs/002-antora-branding) ------------------------------------
+
+ADAPTERS = Path(__file__).resolve().parents[2] / "guide" / "adapters"
+BLOCK = {"logo_text": "Agent Starter Kits",
+         "footer": {"text": "Agent Starter Kits on GitHub",
+                    "url": "https://github.com/red-hat-data-services/agentic-starter-kits"}}
+
+
+def vendor_adapter(root: Path, fmt: str) -> None:
+    tools = root / "tools" / "guide"
+    tools.mkdir(parents=True, exist_ok=True)
+    (tools / "adapter.yaml").write_text((ADAPTERS / fmt / "adapter.yaml").read_text())
+
+
+def run_cli(root: Path, *args: str) -> subprocess.CompletedProcess:
+    return subprocess.run([sys.executable, str(TOOLKIT / "guidecfg.py"), *args, "--root", str(root)],
+                          capture_output=True, text=True)
+
+
+def test_branding_block_validates_for_antora(render_fixture_guide):
+    root = render_fixture_guide
+    vendor_adapter(root, "antora")
+    edit(root / "guide.yaml", lambda d: d.update(branding=BLOCK))
+    assert guidecfg.validate(root) == ([], [])
+    assert guidecfg.load_guide(root).branding == BLOCK
+
+
+@pytest.mark.parametrize("fmt", ["mkdocs", "gfm"])
+def test_branding_block_fails_for_other_formats(render_fixture_guide, fmt):
+    root = render_fixture_guide
+    vendor_adapter(root, fmt)
+    edit(root / "guide.yaml", lambda d: d.update(format=fmt, branding=BLOCK))
+    problems, _ = guidecfg.validate(root)
+    assert f"guide.yaml:branding.logo_text: not supported by the {fmt} adapter" in problems
+    assert f"guide.yaml:branding.footer: not supported by the {fmt} adapter" in problems
+
+
+def test_adapter_branding_list(tmp_guide):
+    vendor_adapter(tmp_guide, "antora")
+    assert guidecfg.load_adapter(tmp_guide).branding == ["logo_text", "logo", "logo_alt", "footer", "favicon", "color"]
+    (tmp_guide / "tools" / "guide" / "adapter.yaml").write_text("format: antora\n")
+    assert guidecfg.load_adapter(tmp_guide).branding == []
+    vendor_adapter(tmp_guide, "gfm")
+    assert guidecfg.load_adapter(tmp_guide).branding == []
+
+
+def test_invalid_branding_block_still_loads(render_fixture_guide):
+    root = render_fixture_guide
+    edit(root / "guide.yaml", lambda d: d.update(branding={"logo_text": "x" * 41, "logo": "nope.svg"}))
+    guide = guidecfg.load_guide(root)
+    assert guide.branding == {"logo_text": "x" * 41, "logo": "nope.svg"}
+    proc = run_cli(root, "get", "internal.enabled")
+    assert proc.returncode == 0 and proc.stdout.strip() == "true"
+
+
+def test_branding_must_be_a_mapping(render_fixture_guide):
+    # load_guide stays tolerant, so `get internal.enabled` works and the Makefile reaches
+    # playbook.py, which stops the build (FR-010); validate reports the problem once.
+    root = render_fixture_guide
+    edit(root / "guide.yaml", lambda d: d.update(branding="Agent Starter Kits"))
+    assert guidecfg.load_guide(root).branding is None
+    proc = run_cli(root, "get", "internal.enabled")
+    assert proc.returncode == 0 and proc.stdout.strip() == "true"
+    problems, _ = guidecfg.validate(root)
+    assert problems == ["guide.yaml:branding: must be a mapping"]
+
+
+def test_guide_without_branding_validates_as_before(render_fixture_guide):
+    assert guidecfg.load_guide(render_fixture_guide).branding is None
+    assert guidecfg.validate(render_fixture_guide) == ([], [])
+    proc = run_cli(render_fixture_guide, "validate")
+    assert proc.returncode == 0
+    assert proc.stdout == "guide configuration OK\n"   # the same output as before the feature
+
+
+def test_cli_validate_prints_branding_problems(render_fixture_guide):
+    root = render_fixture_guide
+    edit(root / "guide.yaml", lambda d: d.update(branding={"logo_text": "Kits", "color": "green"}))
+    proc = run_cli(root, "validate")
+    assert proc.returncode == 1
+    assert "guide.yaml:branding.color: must be a #rrggbb color (got green)" in proc.stdout.splitlines()
+
+
+def test_cli_validate_prints_overlay_problem(render_fixture_guide, tmp_path):
+    root = render_fixture_guide
+    css = root / "ui" / "supplemental" / "css"
+    css.mkdir(parents=True)
+    (tmp_path / "outside.css").write_text("a{}\n")
+    os.symlink(tmp_path / "outside.css", css / "x.css")
+    proc = run_cli(root, "validate")
+    assert proc.returncode == 1
+    lines = proc.stdout.splitlines()
+    assert any(line.startswith("ui/supplemental:css/x.css: ") for line in lines), lines
+    assert not any(line.startswith("guide.yaml:ui/supplemental") for line in lines)
+
+
+def test_cli_validate_prints_shadowing_warning(render_fixture_guide):
+    root = render_fixture_guide
+    edit(root / "guide.yaml", lambda d: d.update(branding={"logo_text": "Kits"}))
+    partials = root / "ui" / "supplemental" / "partials"
+    partials.mkdir(parents=True)
+    (partials / "footer-content.hbs").write_text('<footer class="footer">mine</footer>\n')
+    proc = run_cli(root, "validate")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert ("ui/supplemental/partials/footer-content.hbs: warning: shadows the file generated for branding.footer"
+            in proc.stdout.splitlines())
