@@ -26,3 +26,6 @@ dist/
 # Test and run state
 .pytest_cache/
 .guide/
+
+# Local reference checkouts (not part of the plugin)
+/OpenClaw/
