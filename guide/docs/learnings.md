@@ -26,7 +26,7 @@ These lessons come from building the first source-verified guide with this metho
 
 ## Excalidraw diagrams
 
-- **Prefer curved arrows, with the right mechanics.** A curved arrow is an `arrow` element with `"roundness": {"type": 2}` and at least three `points`. The MCP's `update_element` cannot set `points` or `roundness`, so change arrow geometry by editing the scene JSON and re-importing it (`import_scene`, mode `replace`), or by deleting the arrow and recreating it with `batch_create_elements`. (FR-022)
+- **Prefer curved arrows, with the right mechanics.** A curved arrow is an `arrow` element with `"roundness": {"type": 2}` and at least three `points`. The MCP's `update_element` cannot set `points` or `roundness`, so change arrow geometry by editing the scene JSON and re-importing it on a cleared canvas (`clear_canvas`, then `import_scene`). Deleting the arrow and recreating it with `batch_create_elements` works only for straight or elbowed arrows (see "Canvas setup"). (FR-022)
 - **Arrow labels follow the arrow.** A label bound to an arrow is always drawn at the midpoint of the arrow path; setting its x or y does nothing. Reshape the arrow, or make the label free-standing text and place it explicitly. (FR-022)
 - **A rectangle with a text label is not a container.** Moving such a "frame" moves neither its label nor the boxes inside it. One layout change broke a diagram exactly this way: frames moved, labels and legend stayed behind, and arrows ended in empty space. Use real Excalidraw frames or groups, or move a container together with all its children and its label. (FR-022)
 - **Plan the layout before drawing arrows.** Leave 80 to 100 px channels between rows for arrows and their labels, at least 40 px between boxes, and keep every box and label off frame borders. Most crossings came from rows packed too tightly to route around anything. (FR-022)
@@ -49,7 +49,14 @@ This was the most expensive lesson.
 
 - **Know which canvas you are drawing on.** There can be several: a project `.mcp.json` server (port 3000 in the SAW run) and a user-level one (port 3100). The server's `/health` endpoint shows `elements_count` and `websocket_clients`. `export_to_image` needs a browser tab connected to that canvas, so open it when `websocket_clients` is 0. (FR-024)
 - **Back up the canvas before replacing the scene,** and restore it afterwards, because the author may have their own drawing there. Server snapshots live only in memory and are not a backup. (FR-024)
-- **Pre-approve the Excalidraw tools.** Permission prompts stalled one diagram task for about three hours. (research R9)
+- **Pre-approve the Excalidraw tools where the session reads them.** Permission prompts stalled one diagram task for about three hours. In a later run the session ran in a different directory than the guide project. Claude Code reads the session directory's `.claude/settings*.json` and `~/.claude/settings.json`, not the guide project's, and the classifier denied `clear_canvas` and `import_scene` to a subagent. (research R9)
+
+Canvas facts from a later guide run (`yctimlin/mcp_excalidraw`):
+
+- **Clear the canvas before drawing.** The canvas still held the author's old drawing, and restoring it after every diagram meant each new diagram started on top of old content; screenshots and the author's view were confusing. Back up once, `clear_canvas`, confirm `elements_count` 0 on `/health`, draw every diagram on an empty canvas, and restore the author's drawing only at the end of the run. (FR-024)
+- **`import_scene` with mode `replace` keeps existing elements.** A clean restore or reload is `clear_canvas` first, then `import_scene`, then a count check. (FR-024)
+- **`batch_create_elements` drops custom points on bound arrows.** Curved arrows only worked by generating the scene JSON (boxes, bound texts, arrows with bindings) and loading it with `import_scene`. (FR-022)
+- **The server reads and writes files only under its working directory or `EXCALIDRAW_EXPORT_DIR`.** `export_scene` into a guide project elsewhere failed with "Path traversal blocked"; agents had to stage files in an allowed directory and move them. Set `EXCALIDRAW_EXPORT_DIR` in the server's `env` to a directory that contains the guide projects. (FR-024)
 
 ## Preview and rendering
 

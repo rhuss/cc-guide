@@ -1,6 +1,6 @@
 ---
 name: diagrams
-description: Draw, check, export, and review Excalidraw diagrams for a cc-guide guide project. Used by create and evolve for every diagram task. Covers canvas identification and backup, layout and curved-arrow rules, the overlap gate (diagram_check.py), versioned export rounds, the controller's review at native resolution, the two-round cap with manual hand-off, permissions, and the placeholder path when the Excalidraw tools are missing.
+description: Draw, check, export, and review Excalidraw diagrams for a cc-guide guide project. Used by create and evolve for every diagram task. Covers canvas identification, the server's file paths, backup, clearing and restore, layout and curved-arrow rules, the drawer's screenshot self-check, the overlap gate (diagram_check.py), versioned export rounds, the controller's review at native resolution, the two-round cap with manual hand-off, permissions, and the placeholder path when the Excalidraw tools are missing.
 argument-hint: "<diagram-name> [--round N]"
 allowed-tools: ["Bash", "Read", "Write", "Edit", "mcp__excalidraw__*"]
 ---
@@ -13,8 +13,8 @@ Paths below are relative to the guide project root. Toolkit scripts live in `too
 
 ## Roles
 
-- **Drawing subagent** (the implementer of a diagram task): steps 1 to 7 and the automated fix rounds of step 9.
-- **Controller** (the session that runs the plan): step 8 always, the round count and hand-off of step 9, and the final acceptance. A drawing subagent's own visual review never counts as the review (FR-023a): one subagent reported "all arrows pass" three times while the export still had arrows through boxes.
+- **Drawing subagent** (the implementer of a diagram task): steps 1 to 7 (with the self-check of step 5a) and the automated fix rounds of step 9.
+- **Controller** (the session that runs the plan): step 8 always, the round count and hand-off of step 9, the final acceptance, and the restore of the author's drawing at the end of the run (step 2). A drawing subagent's own visual review never counts as the review (FR-023a): one subagent reported "all arrows pass" three times while the export still had arrows through boxes.
 
 ## 1. Canvas: know which canvas the tools talk to (FR-024)
 
@@ -26,18 +26,39 @@ Several canvases may run at once (a project `.mcp.json` server and a user-level 
 4. Tell the author which canvas URL the diagram is drawn on.
 5. `export_to_image` needs a browser connected to that canvas. When its `websocket_clients` is 0, open the URL (`open <url>` on macOS) or ask the author to, and check `/health` again before any export.
 
-## 2. Backup the author's canvas (FR-024)
+## 1a. Files: where the server can read and write
 
-Before `clear_canvas`, or `import_scene` with `mode: "replace"`, and before drawing on a canvas that has elements:
+The server reads and writes files only under its own working directory (for a server that Claude Code starts, usually the directory the session was started in), or under `EXCALIDRAW_EXPORT_DIR` when that is set in the server's `env`. Any other `filePath` of `export_scene`, `export_to_image`, or `import_scene` fails with "Path traversal blocked ... Set EXCALIDRAW_EXPORT_DIR". When the guide project lies outside that directory:
+
+1. Recommend that the author set `EXCALIDRAW_EXPORT_DIR` in the server's `env` to a directory that contains their guide projects and restart Claude Code (see `docs/settings.md`). Until then, stage.
+2. Staging: use a dedicated directory the server allows, for example `<EXCALIDRAW_EXPORT_DIR or the server's working directory>/.guide-staging/<name>/` (create it with `mkdir -p`). Export into it with an absolute `filePath`, then move each file into its place in the guide project (`mv`) right away. For an import, copy the file into the staging directory first and import from there (a small scene can also go to `import_scene` as `data`).
+3. Remove the staging files and the staging directory when the step is done, and check that nothing is left behind in the author's checkout.
+
+The paths below name the final location in the guide project; with staging, that is where the file must end up.
+
+## 2. Backup, clear, and restore the canvas (FR-024)
+
+Every diagram is drawn on an empty canvas, never on top of the author's drawing or an earlier diagram.
+
+**Backup.** Before the first `clear_canvas` of a run, when the canvas has elements (and again before any later clear, when the canvas holds elements that are not a diagram of this run already saved in its round directory):
 
 ```bash
 mkdir -p .guide/canvas-backup
 ```
 
-1. `mcp__excalidraw__export_scene` with `filePath: <guide>/.guide/canvas-backup/<YYYYMMDD-HHMMSS>.excalidraw` (absolute path).
+1. `mcp__excalidraw__export_scene` with `filePath: <guide>/.guide/canvas-backup/<YYYYMMDD-HHMMSS>.excalidraw` (absolute path; stage it as in step 1a when the path is blocked).
 2. `chmod a-w` the backup file and check that it is non-empty JSON with the expected element count.
 3. `snapshot_scene` is not a backup (it lives only in the server's memory).
-4. When the diagram work is done (accepted or handed off), restore the author's drawing with `import_scene` (`filePath` of the backup, `mode: "replace"`), after the accepted scene has been saved (step 7). Tell the author the backup path.
+
+**Clear.** Before drawing each diagram (and before loading a scene for it, steps 4 and 9): `mcp__excalidraw__clear_canvas`, then `curl -s <url>/health` and confirm that `elements_count` is 0. When it is not, clear again and check again; never draw while old elements are left.
+
+**Keep the result.** When a diagram is accepted (or handed off), leave it on the canvas so the author sees it. The next diagram task clears it; its scene is already saved (step 7).
+
+**Restore.** Restore the author's drawing only at the end of the run (the controller does it in the wrap-up) or earlier when the author asks for it, and only after the last scene has been saved (step 7). Always in this order:
+
+1. `clear_canvas`, and check that `elements_count` is 0. `import_scene` with `mode: "replace"` does not remove the elements already on the canvas; without the clear, the backup lands on top of the last diagram.
+2. `import_scene` with the backup's `filePath` (staged as in step 1a when needed) and `mode: "replace"`.
+3. `curl -s <url>/health` and check that `elements_count` equals the backup's element count. Tell the author the backup path.
 
 ## 3. Layout plan before any arrow (FR-022)
 
@@ -49,12 +70,13 @@ Write the plan as a short table in the task notes before drawing:
 - every box and every label at least 20 px away from any frame border
 - the legend position (bottom or right edge, outside all frames)
 
-Create boxes with `batch_create_elements`, each box with its label as bound text (one text per container).
+Create boxes with `batch_create_elements`, each box with its label as bound text (one text per container). When the diagram has curved arrows, generate the whole scene instead, boxes included (step 4), so that boxes and arrows reference each other consistently.
 
 ## 4. Arrows (FR-022)
 
-- Curved arrows are preferred: an `arrow` element with `roundness: {type: 2}` and at least three points, bound to box edges with `startElementId` and `endElementId`. Unbound arrows end in empty space as soon as a box moves.
-- Never change arrow geometry with `update_element`: it cannot set `points` or `roundness`. Either edit the scene JSON (exported with `export_scene`) and re-import it with `import_scene` mode `replace` after a backup (step 2), or delete the arrow and recreate it with `batch_create_elements`.
+- Curved arrows are preferred: an `arrow` element with `roundness: {type: 2}` and at least three points, bound to box edges (in scene JSON: `startBinding` and `endBinding` with the box ids, and the arrow listed in each box's `boundElements`). Unbound arrows end in empty space as soon as a box moves.
+- `batch_create_elements` drops custom points on bound arrows (`startElementId`, `endElementId`), so it cannot draw curved arrows. Build curved arrows in scene JSON: a small generator script in `.guide/diagrams/<name>/` (for example `scene.py`, run from the guide root with `uv run .guide/diagrams/<name>/scene.py`) writes `.guide/diagrams/<name>/scene.excalidraw` with the boxes, their bound texts, and the arrows. Load it with `import_scene` (`mode: "replace"`) on the canvas cleared as in step 2 (staged as in step 1a when the path is blocked).
+- Never change arrow geometry with `update_element`: it cannot set `points` or `roundness`. Change the generator (or the scene JSON exported with `export_scene`), clear the canvas and check the count (step 2), and load it again with `import_scene`. Deleting an arrow and recreating it with `batch_create_elements` only works for straight or elbowed arrows.
 - A label bound to an arrow is always drawn at the midpoint of the arrow path; setting its x or y has no effect. Move it by reshaping the arrow, or make it free-standing text placed explicitly in a channel.
 - Route arrows through the channels; keep them clear of notes, labels, and unrelated boxes.
 - First diagram of a run: after drawing the first curved arrow, call `get_element` on it (expect `roundness.type == 2` and three or more points) and export a test image. If curves do not render, fall back to `elbowed: true` arrows for the run and record a ruling.
@@ -71,6 +93,16 @@ One semantic palette for the whole guide; one entity keeps one color in every di
 | User-owned | `#d0ebff` | `#1971c2` |
 
 Text and legend text use `#495057`, never the default `#1e1e1e`. When a guide needs another meaning, add a row to the guide's `styleguide.md` and use it everywhere.
+
+## 5a. Self-check on the canvas screenshot (drawing subagent)
+
+After each layout pass (the first drawing of steps 3 to 5, and every fix pass of step 9):
+
+1. Call `mcp__excalidraw__get_canvas_screenshot` and look at the image.
+2. Look for overlapping boxes, clipped or overflowing labels, arrows through boxes or labels, arrows ending in empty space, labels on frame borders, wrong palette colors, and missing legend entries.
+3. Fix what you see on the canvas, then take a new screenshot.
+
+At most two self-check passes per layout pass; then continue with step 6 and name what still looks wrong in your report. This is the drawer's own check, to catch obvious problems before the gate. It never replaces the controller's review of the exported image (step 8, FR-023a): the canvas render differs from the export, and drawers have reported clean diagrams that were not.
 
 ## 6. Before export: dedupe and the overlap gate (FR-022, FR-023)
 
@@ -124,16 +156,21 @@ uv run tools/guide/diagram_check.py crops .guide/diagrams/<name>/round<N>/<name>
 
 ## 9. Fix rounds and manual hand-off (FR-023b)
 
-- At most two automated fix rounds per diagram. A fix round = one fix pass by the drawing subagent on the canvas, then steps 6 to 8 into the next round directory.
+- At most two automated fix rounds per diagram. A fix round = one fix pass by the drawing subagent on the canvas (with the self-check of step 5a), then steps 6 to 8 into the next round directory.
 - If round 2 is still not accepted (or the author declines the result), stop fixing and hand over:
   > Diagram `<name>` is open for manual edit on <canvas URL>. Round <N> is in `.guide/diagrams/<name>/round<N>/` with the review notes. Edit it on the canvas and tell me "done" when you are finished.
 - Wait for the author's "done". Then export, check, and review again (steps 6 to 8) into a new round directory. Manual editing is a regular step of the flow, not an error.
-- If an earlier round was better, restore it from its round directory with `import_scene` (`mode: "replace"`, after a backup) instead of fixing forward.
+- If an earlier round was better, load it from its round directory instead of fixing forward: `clear_canvas`, check that `elements_count` is 0 (step 2), then `import_scene` with `mode: "replace"`.
 - Record every round in the ledger: `Task <N>: diagram <name> round <R> (<findings> findings, review <verdict>)`.
 
 ## 10. Permissions
 
-Permission prompts stalled one diagram task for about three hours. Before the first diagram task, check the guide project's `.claude/settings.local.json` (and `.claude/settings.json`) for an allow entry `mcp__excalidraw` (or `mcp__excalidraw__*`). `scripts/deps.sh` reports it as `excalidraw_allowed`. When it is missing, offer to add it and add it only after the author agrees:
+Permission prompts stalled one diagram task for about three hours, and an allow entry in the wrong file let the permission classifier deny `clear_canvas` and `import_scene` to a drawing subagent. The allow entry `mcp__excalidraw` (or `mcp__excalidraw__*`) must be in the settings Claude Code reads for the controlling session, which its subagents share:
+
+- `.claude/settings.local.json` (or `.claude/settings.json`) of the directory the session runs in (its git toplevel inside a repository), or
+- `~/.claude/settings.json`.
+
+The guide project's own `.claude/settings*.json` only apply to sessions started in the guide project. Before the first diagram task, run `bash "$PLUGIN/scripts/deps.sh" --dir <guide> --session-dir <session directory>` (`PLUGIN` is the plugin root, two directories above this skill's base directory; the session directory is the one the session was started in). It reports `excalidraw_allowed` and, in `excalidraw_allowed_in`, the files that hold the entry. When the entry is missing, or it is only in the guide project's files while the session runs elsewhere, offer to add it to `<session directory>/.claude/settings.local.json` (and, as an option for future sessions started there, to the guide project's), and add it only after the author agrees:
 
 ```json
 { "permissions": { "allow": ["mcp__excalidraw"] } }

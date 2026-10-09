@@ -14,6 +14,7 @@ Paths used below:
 - `GUIDE`: the guide project directory (absolute).
 - `SP`: superpowers `installPath` from the preflight probe.
 - `WS`: the superpowers plan workspace for `docs/guide/plan.md`.
+- `SESSION`: the directory this Claude Code session was started in (as in the preflight skill). Claude Code reads the session's permissions from there and from `~/.claude/settings.json`.
 
 Run every command from `GUIDE` or with `-C`/`--root`. Never `cd` into `GUIDE/.guide/cache/`.
 
@@ -31,7 +32,7 @@ Run every command from `GUIDE` or with `-C`/`--root`. Never `cd` into `GUIDE/.gu
 
 ## 1. Preflight
 
-The `/guide:create` command runs the `guide:preflight` skill first. When its result line is not in this conversation (the skill was invoked directly), invoke `guide:preflight` with `create` and `--dir` now. Stop when it stops. Keep its result (`prose`, `excalidraw`, `excalidraw_allowed`, the superpowers installPath and version).
+The `/guide:create` command runs the `guide:preflight` skill first. When its result line is not in this conversation (the skill was invoked directly), invoke `guide:preflight` with `create` and `--dir` now. Stop when it stops. Keep its result (`prose`, `excalidraw`, `excalidraw_allowed`, `excalidraw_allowed_in`, the superpowers installPath and version).
 
 ## 2. Resume or new run (FR-013a)
 
@@ -106,7 +107,7 @@ Invoke the superpowers `brainstorming` skill with these instructions added:
 
 ### 6c. Excalidraw check (FR-003)
 
-When the spec plans diagrams and preflight reported `excalidraw=missing`: warn "Diagrams are planned but the Excalidraw MCP tools are not available in this session. Install the server (`yctimlin/mcp_excalidraw`, see `$PLUGIN/docs/settings.md`) and restart, or continue with placeholder images that name the missing diagrams." Ask whether to continue with placeholders; on yes record a ruling and mark the diagram tasks as placeholder tasks. When the tools are available but `excalidraw_allowed` is false, offer to add `mcp__excalidraw` to `GUIDE/.claude/settings.local.json` `permissions.allow` (a permission prompt once stalled a diagram task for hours).
+When the spec plans diagrams and preflight reported `excalidraw=missing`: warn "Diagrams are planned but the Excalidraw MCP tools are not available in this session. Install the server (`yctimlin/mcp_excalidraw`, see `$PLUGIN/docs/settings.md`) and restart, or continue with placeholder images that name the missing diagrams." Ask whether to continue with placeholders; on yes record a ruling and mark the diagram tasks as placeholder tasks. When the tools are available, check that this session may use them. The allow entry counts only in a file Claude Code reads for this session: `SESSION/.claude/settings.local.json` or `SESSION/.claude/settings.json` (at the git toplevel when `SESSION` is inside a repository), or `~/.claude/settings.json`; the guide project's settings apply only to sessions started in `GUIDE`. When the preflight result is stale or missing, run `bash "$PLUGIN/scripts/deps.sh" --dir "$GUIDE" --session-dir "$SESSION"`. When `excalidraw_allowed` is false, or `excalidraw_allowed_in` lists only files in `GUIDE/.claude/` while `SESSION` is another directory, offer to add `mcp__excalidraw` to `SESSION/.claude/settings.local.json` `permissions.allow` (a permission prompt once stalled a diagram task for hours, and an entry in the wrong file let the classifier deny `clear_canvas` and `import_scene` to a subagent). Mention that adding it to `GUIDE/.claude/settings.local.json` as well covers future sessions started in the guide project. Write only what the author agrees to, merge into an existing file, and never drop entries that are already there.
 
 ### 6d. Guide plan
 
@@ -149,7 +150,8 @@ Run `make check`, then `uv run tools/guide/check.py --structure` (every persona'
 1. **Upstream findings**: for each collected Upstream candidate, add it with `uv run tools/guide/runs.py findings-add --source <id> --kind <kind> --location <path>:<lines> --quote "<text at the pinned commit>" --summary "<one sentence>" --evidence "<what contradicts what>"`. Kinds: `doc-drift`, `stale-reference`, `dead-config`, `missing-doc`, `naming-ux`, `bug`.
 2. **Run summary**: `uv run tools/guide/runs.py summary --workspace "$WS" --run-id <run-id> --command create --rigor <rigor> --model "<your model name>" --effort <high|xhigh>`. It writes `runs/<run-id>.md`.
 3. **Commit** the findings and the run summary (`docs(guide): run summary <run-id>`), and push when opted in.
-4. **Report to the author**:
+4. **Canvas**: when diagram tasks backed up the author's canvas, ask whether to restore the author's drawing now or keep the last diagram on the canvas. Restore as in the `guide:diagrams` skill step 2 (`clear_canvas`, check that `elements_count` is 0, `import_scene` from the backup, check the count), and name the backup path either way.
+5. **Report to the author**:
    - the guide location, format, page count per persona, diagrams
    - every ruling from the ledger ("Rulings I made"), in order, each with what it costs if wrong (FR-014)
    - findings rejected by source, and the upstream findings collected (suggest `/guide:upstream`)

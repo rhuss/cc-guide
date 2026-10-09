@@ -13,6 +13,7 @@ Run this before any other step of a `/guide:*` command. It writes no files. When
 
 - `PLUGIN`: the plugin root, two directories above this skill's base directory (`<base>/../..`). Scripts live in `$PLUGIN/scripts/`, the toolkit in `$PLUGIN/toolkit/`, adapters in `$PLUGIN/adapters/`.
 - `GUIDE`: the guide project. Use `--dir PATH` when given, otherwise the current directory. Resolve it to an absolute path. Never `cd` into `.guide/cache/`.
+- `SESSION`: the directory this Claude Code session was started in (the primary working directory in your environment information), resolved to an absolute path. Claude Code reads the session's permissions from its `.claude/settings*.json` (at its git toplevel inside a repository) and from `~/.claude/settings.json`, not from the guide project's settings when the two differ.
 
 ## Steps
 
@@ -30,10 +31,10 @@ Run this before any other step of a `/guide:*` command. It writes no files. When
 Run:
 
 ```bash
-bash "$PLUGIN/scripts/deps.sh" --dir "$GUIDE"
+bash "$PLUGIN/scripts/deps.sh" --dir "$GUIDE" --session-dir "$SESSION"
 ```
 
-It prints JSON `{"superpowers": bool, "prose": bool, "excalidraw_allowed": bool}`.
+It prints JSON `{"superpowers": bool, "prose": bool, "excalidraw_allowed": bool, "excalidraw_allowed_in": [paths]}`. `excalidraw_allowed` is true when an `mcp__excalidraw` allow entry is in the guide project's settings, in the session directory's settings, or in `~/.claude/settings.json`; `excalidraw_allowed_in` lists the files that hold it.
 
 **superpowers** is required for `create` and for `evolve` without `--check`. For those, run the contract probe:
 
@@ -58,7 +59,7 @@ Stop message when the probe fails on a changed contract:
 
 Record `prose: present|absent`; the create and evolve skills pass it to the page-task templates.
 
-**Excalidraw MCP** is needed only when a run plans diagram tasks. Record whether `mcp__excalidraw__*` tools are available in this session (look at your own tool list) and `excalidraw_allowed` from deps.sh. The create and evolve skills act on it once diagrams are planned (FR-003); preflight does not stop for it.
+**Excalidraw MCP** is needed only when a run plans diagram tasks. Record whether `mcp__excalidraw__*` tools are available in this session (look at your own tool list), and `excalidraw_allowed` and `excalidraw_allowed_in` from deps.sh. The entry covers this session only when `excalidraw_allowed_in` lists a settings file of the session directory (at its git toplevel inside a repository) or `~/.claude/settings.json`; when the session runs in another directory, an entry only in the guide project's files covers just the sessions started there. The create and evolve skills act on it once diagrams are planned (FR-003); preflight does not stop for it and writes no settings.
 
 ### 3. Adapter tool chain
 
@@ -87,7 +88,7 @@ You can see your own model name in your system prompt; you cannot see the effort
 Report a compact block and hand it to the calling skill:
 
 ```text
-preflight: guide=<GUIDE> project=<exists|new> superpowers=<ok|unknown-version|not-needed> prose=<present|absent> excalidraw=<available|missing> excalidraw_allowed=<true|false> doctor=<ok|skipped|failed>
+preflight: guide=<GUIDE> project=<exists|new> superpowers=<ok|unknown-version|not-needed> prose=<present|absent> excalidraw=<available|missing> excalidraw_allowed=<true|false> excalidraw_allowed_in=<paths|none> doctor=<ok|skipped|failed>
 ```
 
 ## Rules

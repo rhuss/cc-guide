@@ -74,7 +74,8 @@ For a guide that has no cc-guide `baseline.yaml` or no source blocks. Regular ev
 
 1. Upstream findings found during the run go through `uv run tools/guide/runs.py findings-add` as in create (FR-031).
 2. `uv run tools/guide/runs.py summary --workspace "$WS" --run-id <run-id> --command evolve --rigor <rigor> --model "<model>" --effort <high|xhigh> --baseline-before "<old pins>" --baseline-after "<new pins>"`.
-3. Commit, push when opted in, and report: pages changed (and that no other page changed), change-request decisions, rulings with their cost if wrong, findings, and next steps.
+3. When diagram tasks backed up the author's canvas, offer the restore as in create section 9 (Canvas).
+4. Commit, push when opted in, and report: pages changed (and that no other page changed), change-request decisions, rulings with their cost if wrong, findings, and next steps.
 
 ## Resume
 
