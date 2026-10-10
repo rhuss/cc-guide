@@ -32,7 +32,8 @@ The controller (the session running `/guide:create` or `/guide:evolve`) does thi
 - **Implementer of a page task**: add to the SDD implementer dispatch: "Before you start, read `<workspace>/page-procedure.md`, `<workspace>/global-constraints.md`, and the guide's `styleguide.md`. They bind this task and win over generic instructions where they differ. cc-prose is <present|absent>." When absent, also name `<workspace>/style-rules.md`.
 - **Implementer of the start page or a section overview page**: also name `<workspace>/overview-contract.md` and paste the spec's `## Why` card into the dispatch.
 - **Reviewer of the start page or a section overview page**: also name `<workspace>/overview-contract.md` and the spec's `## Why` card; the cold-reader test is part of the review.
-- **Implementer of a diagram task**: name the diagrams skill (`guide:diagrams`) and `<workspace>/global-constraints.md`. The controller, not the implementer, reviews the export (FR-023a).
+- **Implementer of a diagram task**: name the diagrams skill (`guide:diagrams`) and `<workspace>/global-constraints.md`, and require the claims file of its step 3a. The controller, not the implementer, reviews the export and the claims (FR-023a, FR-044).
+- **Reviewer of a page that shows a diagram**: add the path `diagrams/<name>.claims.yaml`; check 8 of the review guide applies.
 - **Task reviewer**: add: "Use `<workspace>/page-review-guide.md` as your review guide and output format. The pinned sources are under `.guide/cache/<source-id>/`." Pass the review package path from `review-package` as usual.
 - **Final reviewer** (`requesting-code-review`): add `<workspace>/final-review-addendum.md`, the deferred-minor and parked lines from the ledger, and the paths of `build/site` and `build/site-internal`.
 

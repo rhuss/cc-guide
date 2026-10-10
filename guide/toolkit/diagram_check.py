@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["pillow"]
+# dependencies = ["pillow", "pyyaml"]
 # ///
-"""Overlap gate for Excalidraw diagrams (FR-023) and native-resolution crops (FR-023a).
+"""Overlap gate for Excalidraw diagrams (FR-023), the claims gate (FR-044), and
+native-resolution crops (FR-023a).
 
 check: parses the .excalidraw JSON, samples every arrow path (Catmull-Rom through the
 points for curved arrows, the polyline otherwise) and reports
@@ -15,12 +16,24 @@ points for curved arrows, the polyline otherwise) and reports
   unbound-arrow-end     an arrow end is not bound to an existing element
 Export is blocked until it reports zero findings.
 
+claims: checks that a claims file covers what the diagram asserts. Every text (box
+labels, arrow labels, free text), every arrow, and every frame must be named by a
+claim, and every claim except a legend claim must cite a source. It reports
+  claim-missing-label   a text no claim names (by its id or its container's id)
+  claim-missing-arrow   an arrow no `connects` claim names
+  claim-missing-frame   a frame no `contains` claim names
+  claim-no-source       a claim without a well-formed source
+  claim-unknown-element a claim names an element the scene does not have
+Whether the sources support the claims is the reviewers' judgment, not this gate's.
+
 crops: cuts an exported PNG into tiles of at most 1600 x 1200 px at native resolution,
 plus one crop around each finding, for the controller's review.
 
 Usage:
   uv run tools/guide/diagram_check.py check SCENE [--json]
       exit 0 clean, 1 findings (text lines, then one JSON line), 2 unreadable scene
+  uv run tools/guide/diagram_check.py claims SCENE --claims CLAIMS.yaml [--json]
+      same exit codes; 2 also for an unreadable claims file
   uv run tools/guide/diagram_check.py crops PNG --scene SCENE --out DIR [--padding 10]
 """
 from __future__ import annotations
@@ -28,6 +41,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import re
 import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -303,6 +317,66 @@ def check(scene: Scene) -> list[Finding]:
     return findings
 
 
+# --- claims ---------------------------------------------------------------------
+
+CLAIM_KINDS = {"label", "contains", "connects", "legend"}
+SOURCE_RE = re.compile(r"^(?:[a-z0-9][a-z0-9._-]*:[^\s:]+(?::\d+(?:-\d+)?(?:,\d+(?:-\d+)?)*)?|url:\S+|live:\S.*)$")
+
+
+def load_claims(path: Path | str) -> list[dict]:
+    import yaml
+
+    try:
+        data = yaml.safe_load(Path(path).read_text()) or {}
+    except yaml.YAMLError as err:
+        raise ValueError(f"not valid YAML: {err}") from err
+    claims = data.get("claims") if isinstance(data, dict) else None
+    if not isinstance(claims, list):
+        raise ValueError("claims file has no `claims` list")
+    return [c for c in claims if isinstance(c, dict)]
+
+
+def check_claims(scene: Scene, claims: list[dict]) -> list[Finding]:
+    els = scene.elements
+    findings: list[Finding] = []
+    named: dict[str, set[str]] = {k: set() for k in CLAIM_KINDS}
+
+    for i, claim in enumerate(claims, 1):
+        cid = str(claim.get("id") or f"#{i}")
+        kind = str(claim.get("kind") or "")
+        ids = [str(e) for e in claim.get("elements") or []]
+        for eid in ids:
+            if eid not in els:
+                findings.append(Finding("claim-unknown-element", [eid], scene.bounds,
+                                        f"claim {cid} names element {eid}, which the scene does not have"))
+        if kind not in CLAIM_KINDS:
+            findings.append(Finding("claim-no-source", ids, scene.bounds,
+                                    f"claim {cid} has kind {kind!r}; use one of {sorted(CLAIM_KINDS)}"))
+            continue
+        named[kind].update(ids)
+        if kind == "legend":
+            continue
+        sources = [str(s).strip() for s in claim.get("sources") or []]
+        if not sources or not all(SOURCE_RE.match(s) for s in sources):
+            bad = [s for s in sources if not SOURCE_RE.match(s)]
+            why = f"malformed source {bad[0]!r}" if bad else "no source"
+            findings.append(Finding("claim-no-source", ids, scene.bounds, f"claim {cid} ({kind}) has {why}"))
+
+    any_claim = set().union(*named.values())
+    for el in els.values():
+        if el.type == "text" and el.id not in any_claim and (el.container_id or "") not in any_claim:
+            findings.append(Finding("claim-missing-label", [el.id], el.bbox,
+                                    f"no claim names text {el.id} ({_snippet(el)})"))
+        elif el.type in ARROW_TYPES and el.id not in named["connects"]:
+            findings.append(Finding("claim-missing-arrow", [el.id], el.bbox,
+                                    f"no connects claim names arrow {el.id}"))
+    for frame in scene.frames:
+        if frame.id not in named["contains"]:
+            findings.append(Finding("claim-missing-frame", [frame.id], frame.bbox,
+                                    f"no contains claim names frame {frame.id}"))
+    return findings
+
+
 def _snippet(text: Element) -> str:
     s = str(text.raw.get("text") or "").replace("\n", " ")
     return repr(s[:30] + ("..." if len(s) > 30 else ""))
@@ -356,6 +430,10 @@ def main(argv: list[str] | None = None) -> int:
     c = sub.add_parser("check", help="report overlaps; exit 1 on findings")
     c.add_argument("scene", type=Path)
     c.add_argument("--json", action="store_true", help="print only the JSON report")
+    m = sub.add_parser("claims", help="check that a claims file covers every label, arrow, and frame; exit 1 on findings")
+    m.add_argument("scene", type=Path)
+    m.add_argument("--claims", type=Path, required=True)
+    m.add_argument("--json", action="store_true", help="print only the JSON report")
     k = sub.add_parser("crops", help="cut an exported PNG into review tiles and finding crops")
     k.add_argument("png", type=Path)
     k.add_argument("--scene", type=Path, required=True)
@@ -368,9 +446,17 @@ def main(argv: list[str] | None = None) -> int:
     except (OSError, ValueError, KeyError) as err:
         print(f"cannot read scene {args.scene}: {err}", file=sys.stderr)
         return 2
-    findings = check(scene)
+    if args.cmd == "claims":
+        try:
+            claims = load_claims(args.claims)
+        except (OSError, ValueError) as err:
+            print(f"cannot read claims {args.claims}: {err}", file=sys.stderr)
+            return 2
+        findings = check_claims(scene, claims)
+    else:
+        findings = check(scene)
 
-    if args.cmd == "check":
+    if args.cmd in ("check", "claims"):
         report = {"scene": str(args.scene), "count": len(findings), "findings": [f.to_dict() for f in findings]}
         if not args.json:
             for f in findings:

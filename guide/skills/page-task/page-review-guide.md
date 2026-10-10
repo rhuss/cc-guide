@@ -29,6 +29,7 @@ You review one page task of a source-verified guide. The guide project is the re
    - When it is absent, apply `style-rules.md` in this directory.
 6. **Build.** Valid markup; the implementer's report shows `make check` passing.
 7. **Why (start page and section overview pages only).** Apply the cold-reader test from `overview-contract.md` in this directory and add its five answers to your output. Every unanswered question, every answer that only repeats a name, path, or container, and every component definition that fails one of the contract's four tests is **Important**. A page that matches its outline but fails the test still needs fixes: report the outline gap as well, so the controller corrects the spec's why card.
+8. **Diagrams (pages that show one).** For every diagram the changed page shows, read `diagrams/<name>.claims.yaml` and verify every `contains` and `connects` claim and every label claim against its cited source in `.guide/cache/`, the same way as a page statement. Placement is a fact: a box drawn inside a frame claims that it runs or lives there, and it needs the product's own architecture documentation at the pinned version (or a recorded live check) behind it. An unsupported or contradicted claim, or a diagram without a claims file, is **Important**; name the claim id and the source that contradicts it. Also check that the page's text about the diagram agrees with its claims. List the checked claims in the Factual Spot-Checks table with `diagram:<name>#<claim id>` as the statement.
 
 ## Rules for you
 

@@ -261,6 +261,7 @@ Before publishing, the author wants proof that the documented commands work. The
 **Overview pages**
 
 - **FR-043**: The guide spec MUST start with a why card (problem, outcome, one definition per named product from that product's own pinned source, how the parts fit, why this combination, status and limits) that the author approves before any page is written. The start page and every section overview page MUST answer why before how in the shape the plugin's overview contract fixes, and their per-page and final reviews MUST apply a cold-reader test that treats an unanswered question, or a definition that only repeats a name or its containing repository, as an Important finding. evolve MUST add a missing why card, with the author's approval, and then revise the overview pages.
+- **FR-044**: Every diagram MUST come with a claims file that names each label, arrow, and frame of the scene as a claim with a pinned source or a recorded live check, and a script gate MUST block the export while any of them is unnamed or unsourced. The controller's diagram review, the review of every page that shows the diagram, and the final review MUST verify the containment and connection claims against their sources; an unsupported claim MUST be treated like an unsupported statement on a page. evolve MUST put a diagram into the impact set when its claims cite a changed source file.
 
 **Documentation**
 

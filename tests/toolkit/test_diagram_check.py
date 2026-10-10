@@ -196,3 +196,89 @@ def test_cli_crops(exported_png, tmp_path):
     proc = run_cli("crops", png, "--scene", SCENES / "curved-box.excalidraw", "--out", out)
     assert proc.returncode == 0, proc.stderr
     assert any(p.name.startswith("finding-01-") for p in out.iterdir())
+
+
+# --- claims gate (FR-044) -----------------------------------------------------------
+
+CLEAN_CLAIMS = [
+    {"id": "a", "kind": "label", "elements": ["a"], "text": "box a", "sources": ["mini:README.md:3"]},
+    {"id": "b", "kind": "label", "elements": ["b"], "text": "box b", "sources": ["mini:config/defaults.yaml:2-4,6"]},
+    {"id": "flow", "kind": "connects", "elements": ["arr"], "text": "a calls b",
+     "sources": ["url:https://example.com/minisvc"]},
+    {"id": "legend", "kind": "legend", "elements": ["legend"]},
+]
+
+
+def clean_scene():
+    return diagram_check.load_scene(SCENES / "clean.excalidraw")
+
+
+def test_claims_cover_clean_scene():
+    assert diagram_check.check_claims(clean_scene(), copy.deepcopy(CLEAN_CLAIMS)) == []
+
+
+def test_claims_report_uncovered_label_and_arrow():
+    claims = [c for c in copy.deepcopy(CLEAN_CLAIMS) if c["id"] not in ("b", "flow")]
+    findings = diagram_check.check_claims(clean_scene(), claims)
+    assert kinds(findings) == ["claim-missing-arrow", "claim-missing-label", "claim-missing-label"]
+    labels = {f.element_ids[0] for f in findings if f.kind == "claim-missing-label"}
+    assert labels == {"b-label", "arr-label"}
+
+
+def test_label_claim_does_not_cover_an_arrow():
+    claims = copy.deepcopy(CLEAN_CLAIMS)
+    claims[2]["kind"] = "label"
+    assert kinds(diagram_check.check_claims(clean_scene(), claims)) == ["claim-missing-arrow"]
+
+
+@pytest.mark.parametrize("sources", [[], ["the README"], ["mini:README.md:three"], ["mini:README.md:3", "nowhere"]])
+def test_claims_need_well_formed_sources(sources):
+    claims = copy.deepcopy(CLEAN_CLAIMS)
+    claims[0]["sources"] = sources
+    findings = diagram_check.check_claims(clean_scene(), claims)
+    assert kinds(findings) == ["claim-no-source"]
+
+
+def test_live_source_and_legend_without_source():
+    claims = copy.deepcopy(CLEAN_CLAIMS)
+    claims[0]["sources"] = ["live:cntbh oc get sandbox -o yaml (2026-10-10)"]
+    assert diagram_check.check_claims(clean_scene(), claims) == []
+
+
+def test_claims_report_unknown_element_and_kind():
+    claims = copy.deepcopy(CLEAN_CLAIMS) + [
+        {"id": "ghost", "kind": "label", "elements": ["nope"], "sources": ["mini:README.md"]},
+        {"id": "odd", "kind": "runs-in", "elements": ["a"], "sources": ["mini:README.md"]},
+    ]
+    assert kinds(diagram_check.check_claims(clean_scene(), claims)) == ["claim-no-source", "claim-unknown-element"]
+
+
+def test_every_frame_needs_a_contains_claim():
+    scene = diagram_check.load_scene(SCENES / "frame-border.excalidraw")
+    labels = [{"id": "t", "kind": "label", "elements": ["flabel", "g-title"], "sources": ["mini:README.md:1"]}]
+    findings = diagram_check.check_claims(scene, labels)
+    assert kinds(findings) == ["claim-missing-frame", "claim-missing-frame"]
+    assert {f.element_ids[0] for f in findings} == {"f1", "g-frame"}
+    contains = labels + [{"id": "c", "kind": "contains", "elements": ["f1", "g-frame"], "sources": ["mini:README.md:1"]}]
+    assert diagram_check.check_claims(scene, contains) == []
+
+
+def test_cli_claims(tmp_path):
+    import yaml
+
+    good = tmp_path / "claims.yaml"
+    good.write_text(yaml.safe_dump({"diagram": "clean", "claims": CLEAN_CLAIMS}))
+    proc = run_cli("claims", SCENES / "clean.excalidraw", "--claims", good)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert json.loads(proc.stdout.splitlines()[-1])["count"] == 0
+
+    bad = tmp_path / "bad.yaml"
+    bad.write_text(yaml.safe_dump({"claims": CLEAN_CLAIMS[:1]}))
+    proc = run_cli("claims", SCENES / "clean.excalidraw", "--claims", bad)
+    assert proc.returncode == 1
+    assert "claim-missing-arrow" in proc.stdout
+
+    broken = tmp_path / "broken.yaml"
+    broken.write_text("claims: [unclosed")
+    assert run_cli("claims", SCENES / "clean.excalidraw", "--claims", broken).returncode == 2
+    assert run_cli("claims", SCENES / "clean.excalidraw", "--claims", tmp_path / "missing.yaml").returncode == 2

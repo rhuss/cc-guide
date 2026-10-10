@@ -1,6 +1,6 @@
 ---
 name: diagrams
-description: Draw, check, export, and review Excalidraw diagrams for a cc-guide guide project. Used by create and evolve for every diagram task. Covers canvas identification, the server's file paths, backup, clearing and restore, layout and curved-arrow rules, the drawer's screenshot self-check, the overlap gate (diagram_check.py), versioned export rounds, the controller's review at native resolution, the two-round cap with manual hand-off, permissions, and the placeholder path when the Excalidraw tools are missing.
+description: Draw, check, export, and review Excalidraw diagrams for a cc-guide guide project. Used by create and evolve for every diagram task. Covers canvas identification, the server's file paths, backup, clearing and restore, layout and curved-arrow rules, the claims file with a source for every label, arrow, and frame, the drawer's screenshot self-check, the overlap and claims gates (diagram_check.py), versioned export rounds, the controller's layout and fact review at native resolution, the two-round cap with manual hand-off, permissions, and the placeholder path when the Excalidraw tools are missing.
 argument-hint: "<diagram-name> [--round N]"
 allowed-tools: ["Bash", "Read", "Write", "Edit", "mcp__excalidraw__*"]
 ---
@@ -70,7 +70,36 @@ Write the plan as a short table in the task notes before drawing:
 - every box and every label at least 20 px away from any frame border
 - the legend position (bottom or right edge, outside all frames)
 
-Create boxes with `batch_create_elements`, each box with its label as bound text (one text per container). When the diagram has curved arrows, generate the whole scene instead, boxes included (step 4), so that boxes and arrows reference each other consistently.
+Create boxes with `batch_create_elements`, each box with its label as bound text (one text per container).
+
+## 3a. Claims file: what the diagram asserts, with sources (FR-044)
+
+A diagram makes factual claims with every label, every arrow, and every box drawn inside another. Write them down before drawing, in `.guide/diagrams/<name>/claims.yaml`, and keep it in step with the scene (element ids are the scene's ids):
+
+```yaml
+diagram: sandbox-flow
+claims:
+  - id: supervisor-pod
+    kind: contains            # contains | connects | label | legend
+    elements: [ns, supervisor]
+    text: The supervisor runs in its own pod in the sandbox namespace, not in the workload pod.
+    sources: ["openshell:docs/kubernetes/setup.mdx:20-25"]
+  - id: egress
+    kind: connects
+    elements: [a_egress]
+    text: Workload traffic leaves only through the supervisor service.
+    sources: ["openshell:docs/about/architecture.mdx:100-104"]
+  - id: legend
+    kind: legend
+    elements: [lg_title, lg_user]
+```
+
+- `contains`: a frame or group-frame and what it holds. Every frame needs one. Placement is a claim: drawing a process inside a pod says it runs there.
+- `connects`: an arrow, what talks to what, and in which direction. Every arrow needs one.
+- `label`: a box or free text; the claim covers the box's bound text. Every text needs a claim (an arrow's label is covered by its `connects` claim).
+- `legend`: legend texts and swatches; no source.
+- Sources are `<source-id>:<path>[:<lines>]`, `url:<url>`, or `live:<what was run, where, when>` for a recorded live check. Where a product runs its parts (pods, containers, processes, sidecars) comes from that product's own architecture documentation at the pinned version, or a live check, never from the integrating repository, an older release, or memory. When the product's docs and the integrating repository disagree, follow the product's docs and report the pair as an Upstream candidate.
+- A label states only what its source states. A claim without a source does not go into the diagram. When the diagram has curved arrows, generate the whole scene instead, boxes included (step 4), so that boxes and arrows reference each other consistently.
 
 ## 4. Arrows (FR-022)
 
@@ -116,6 +145,15 @@ At most two self-check passes per layout pass; then continue with step 6 and nam
    ```
 
    Exit 0 means zero findings. Exit 1 lists findings (`arrow-crosses-text`, `arrow-crosses-box`, `crosses-frame-border`, `duplicate-bound-text`, `unbound-arrow-end`) as text lines followed by one JSON line. Export only at zero findings; otherwise fix and re-run (the fixes before the first export do not count as fix rounds).
+4. Copy the claims file into the round directory and run the claims gate on the saved scene:
+
+   ```bash
+   cp .guide/diagrams/<name>/claims.yaml .guide/diagrams/<name>/round<N>/claims.yaml
+   uv run tools/guide/diagram_check.py claims .guide/diagrams/<name>/round<N>/<name>.excalidraw \
+     --claims .guide/diagrams/<name>/round<N>/claims.yaml | tee .guide/diagrams/<name>/round<N>/claims.txt
+   ```
+
+   It reports every text, arrow, and frame that no claim names (`claim-missing-label`, `claim-missing-arrow`, `claim-missing-frame`), claims without a well-formed source (`claim-no-source`), and claims that name elements the scene lacks (`claim-unknown-element`). Export only when both gates report zero findings.
 
 ## 7. Export a round (FR-023b)
 
@@ -125,6 +163,8 @@ Every round writes to its own directory and is never overwritten:
 .guide/diagrams/<name>/round<N>/
   <name>.excalidraw   scene (step 6)
   check.txt           overlap gate report (step 6)
+  claims.yaml         the claims of this round (step 3a)
+  claims.txt          claims gate report (step 6)
   <name>.svg          export_to_image, format svg
   <name>.png          2x PNG rendered from the SVG
   crops/              controller review tiles (step 8)
@@ -133,7 +173,7 @@ Every round writes to its own directory and is never overwritten:
 
 1. `mcp__excalidraw__export_to_image` with `format: "svg"` and `filePath: <guide>/.guide/diagrams/<name>/round<N>/<name>.svg`.
 2. `node tools/guide/shoot.mjs svg .guide/diagrams/<name>/round<N>/<name>.svg .guide/diagrams/<name>/round<N>/<name>.png --scale 2`
-3. Only after the controller accepts the round (step 8): copy `<name>.excalidraw` to `diagrams/<name>.excalidraw` and the SVG and PNG to the adapter's image directory:
+3. Only after the controller accepts the round (step 8): copy `<name>.excalidraw` to `diagrams/<name>.excalidraw`, `claims.yaml` to `diagrams/<name>.claims.yaml` (reviewers of the pages that show the diagram read it there), and the SVG and PNG to the adapter's image directory:
 
 | Format | Image directory | Page markup |
 |---|---|---|
@@ -152,7 +192,10 @@ uv run tools/guide/diagram_check.py crops .guide/diagrams/<name>/round<N>/<name>
 
 1. Read every `tile-r<R>-c<C>.png` (at most 1600 x 1200 px, so nothing is downscaled) and every `finding-<NN>-<kind>.png`.
 2. Look for arrows through boxes or labels, labels on frame borders, clipped or overlapping text, wrong colors, missing legend entries, and arrows ending in empty space.
-3. Write `review.md` in the round directory: one line per tile with what you saw, the list of problems with tile references, and the verdict `accepted` or `needs fixes`.
+3. Check the facts. Read `claims.yaml` and open the cited source of every `contains` and `connects` claim, and of every label that names a product part, a location, a port, or a command. A claim its source does not state, or a box drawn where the product's own architecture documentation does not place it, makes the round `needs fixes`, however clean the layout is. A clean layout review once accepted a diagram that placed a process in the wrong pod; layout and facts are separate checks.
+4. Write `review.md` in the round directory: one line per tile with what you saw, one line per checked claim with the source read and the verdict, the list of problems with tile or claim references, and the verdict `accepted` or `needs fixes`.
+
+The page reviewer of every page that shows the diagram checks the claims again, independently (`page-review-guide.md`, check 8).
 
 ## 9. Fix rounds and manual hand-off (FR-023b)
 
