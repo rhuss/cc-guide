@@ -28,6 +28,7 @@ You review one page task of a source-verified guide. The guide project is the re
    - When cc-prose is installed, read the implementer's `prose:check` result and treat unaddressed AI-pattern findings as Minor (Important when they distort a fact).
    - When it is absent, apply `style-rules.md` in this directory.
 6. **Build.** Valid markup; the implementer's report shows `make check` passing.
+7. **Why (start page and section overview pages only).** Apply the cold-reader test from `overview-contract.md` in this directory and add its five answers to your output. Every unanswered question, every answer that only repeats a name, path, or container, and every component definition that fails one of the contract's four tests is **Important**. A page that matches its outline but fails the test still needs fixes: report the outline gap as well, so the controller corrects the spec's why card.
 
 ## Rules for you
 
@@ -48,6 +49,10 @@ Begin directly with the first heading:
 ### Factual Spot-Checks
 | # | Statement (page:line) | Source read | Verdict |
 |---|---|---|---|
+### Cold-Reader Test
+(start page and section overview pages only; otherwise write "not an overview page")
+| Question | Answer in one sentence | Page lines |
+|---|---|---|
 ### Strengths
 ### Issues
 #### Critical (Must Fix)

@@ -1,0 +1,19 @@
+# The start page is factually true at the kit source and matches its brief, but a
+# reader who knows neither product learns nothing about why to run it (FR-043).
+# The review must report each defect below as Critical or Important. `keywords`
+# must all appear in one finding entry (case-insensitive); a nested list means any
+# one of the alternatives.
+planted:
+  - id: relay-definition
+    statement: "The recipe describes Relay as a logging tool."
+    truth: "relay:README.md defines Relay as a message relay that buffers events between services"
+    keywords: ["relay", ["logging tool", "describes relay"], ["message relay", "buffers", "relay:readme", "relay/readme", "own source", "own readme"]]
+  - id: corral-undefined
+    statement: "The second way runs Relay in a Corral sandbox"
+    truth: "corral:README.md defines Corral as a runtime for untrusted programs in policy-enforced sandboxes; the page never says what it is"
+    keywords: ["corral", ["undefined", "not defined", "never defined", "no definition", "never says what", "not explain", "never explain", "without defining", "without explaining", "what corral is", "what is corral", "is never introduced", "not introduced"]]
+  - id: outcome-missing
+    statement: "The kit ships a recipe for running Relay on the platform."
+    truth: "the page never says what the reader gets or which problem Relay solves"
+    keywords: [["outcome", "what do i get", "what you get", "what the reader gets", "what i get", "problem"]]
+difficulty: medium

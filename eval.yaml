@@ -2,7 +2,8 @@
 #
 # Deterministic logic is covered by pytest (make test) and the adapter smoke tests
 # (make test-adapters). These cases cover the judgment points a script cannot check
-# (research R11, SC-002): a page review must catch planted false statements, upstream
+# (research R11, SC-002): a page review must catch planted false statements and a
+# start page that is sourced but fails the cold-reader test (FR-043), upstream
 # must drop findings that no longer hold on the default branch and file nothing
 # without approval, and validate must never treat a mutating command as a query.
 #
@@ -42,7 +43,8 @@ dataset:
     Each case directory contains:
     - input.yaml: `prompt`, the instruction for the session (prompt mode)
     - annotations.yaml: the expected outcome for the judges
-      - review cases: `planted`, a list of false statements with `keywords`
+      - review cases: `planted`, a list of false statements or overview defects
+        with `keywords`
       - upstream cases: `expected`, finding id to allowed final statuses
       - classifier cases: `expected`, command to query or mutating
     - case files the prompt refers to (a page and its pinned sources, a setup

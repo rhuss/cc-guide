@@ -258,6 +258,10 @@ Before publishing, the author wants proof that the documented commands work. The
 - **FR-039a**: validate MUST NOT write credentials, tokens, or connection secrets into the guide project, the run records, the findings, or upstream drafts, and MUST redact them from reported command output.
 - **FR-040**: Validation results MUST be reported per command and turned into review findings for mismatches.
 
+**Overview pages**
+
+- **FR-043**: The guide spec MUST start with a why card (problem, outcome, one definition per named product from that product's own pinned source, how the parts fit, why this combination, status and limits) that the author approves before any page is written. The start page and every section overview page MUST answer why before how in the shape the plugin's overview contract fixes, and their per-page and final reviews MUST apply a cold-reader test that treats an unanswered question, or a definition that only repeats a name or its containing repository, as an Important finding. evolve MUST add a missing why card, with the author's approval, and then revise the overview pages.
+
 **Documentation**
 
 - **FR-041**: The plugin MUST document the lessons learned while building the SAW guide (the list in the brainstorm document) and the recommended session settings: the most capable model for the controlling session, subagents inheriting it, a high reasoning effort for create and evolve and a higher one for strict rigor, and a permission allowlist for the tools the run needs instead of bypassing all permissions.

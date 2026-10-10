@@ -22,6 +22,7 @@ Run every command from the guide project root with path arguments. Never `cd` in
 
 4. **Draft the page.**
    - Start the body directly after the title and the source block.
+   - The start page and the section overview pages follow `overview-contract.md` in this directory: the start page shape, the four tests for every component definition, and the spec's `## Why` card as the content to carry. Define each product from its own pinned source. When the brief's outline asks for repository layout or implementation detail on the start page, move it to the page the contract names and report the deviation.
    - Explanations first, then tasks. A task section opens with a short paragraph on why the reader does it, followed by numbered steps with copy-paste commands.
    - A step with an observable result ends with a check: a `Check:` line saying what the reader should see, the command listing, and an expectation comment (see the snippets below). Write an expectation whenever the result is predictable; `/guide:validate` reports checks without one as not evaluable.
    - Versions, commits, and permalinks come only from the baseline values (snippets below). Never type them.

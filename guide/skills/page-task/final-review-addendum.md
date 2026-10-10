@@ -21,7 +21,8 @@ This addendum extends the superpowers `requesting-code-review` dispatch for the 
 4. **Experimental content.** Every experimental label matches a change request in `baseline.yaml` with the right tier and anchor, and nothing in-review is described as if it were released.
 5. **Guide-wide prose.** Consistent voice per section, no repeated introductions, no filler. Skip the prose AI-pattern check in this pass (it ends the turn and adds little at this scale).
 6. **Deferred minors.** For each deferred minor and parked finding from the ledger, decide: fix now (list it under Important or Minor with the fix), or accept with a reason. Every accepted one needs a one-line ruling the controller records. A deferred finding that ends up with neither a fix nor a ruling blocks the wrap-up; the controller checks this table against the ledger for completeness.
-7. **Sampled facts.** Pick at least ten statements across different pages that the per-page reviews did not list in their spot-check tables and verify them against the pinned sources. Count a statement as supported only when a cited source states it; an added unit, an inferred side effect, or general advice counts as unsupported.
+7. **Why.** Compare the start page and every section overview page with the spec's `## Why` card, then apply the cold-reader test from `overview-contract.md` to each of them as a reader who knows none of the named products. Every failed question is Important. Check across pages that each product carries the same definition everywhere and that no later page is the first to explain what a product named on the start page is.
+8. **Sampled facts.** Pick at least ten statements across different pages that the per-page reviews did not list in their spot-check tables and verify them against the pinned sources. Count a statement as supported only when a cited source states it; an added unit, an inferred side effect, or general advice counts as unsupported.
 
 ## Rules for you
 
@@ -33,6 +34,8 @@ Use the output format of `page-review-guide.md`, with these extra sections befor
 
 ### Persona Journeys
 One short paragraph per persona: path taken, gaps found.
+### Cold-Reader Test
+One table per overview page, in the format of `page-review-guide.md`.
 ### Boundary Check
 The leak check result and anything found by reading.
 ### Deferred Minor Adjudication

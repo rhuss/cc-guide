@@ -9,7 +9,7 @@ These rules apply when cc-prose is not installed (FR-003a). With cc-prose, the s
 - Active voice with a clear actor: "The installer creates the namespace", not "The namespace is created".
 - Address the reader as "you" in task pages; describe the system in the third person in concept pages.
 - Name things exactly as the source does (file names, keys, targets, flags), in code formatting.
-- Define a term at its first use on a page, or link to the page that defines it.
+- Define a term at its first use on a page, or link to the page that defines it. A definition says what the thing does for the reader; it never explains a name with the same name or with the repository, recipe, or directory that contains it (`overview-contract.md` has the four tests).
 - State facts plainly. Hedge only where the source is genuinely uncertain, and then say what is uncertain.
 - No promotional or inflated wording. Banned: "seamless", "robust", "powerful", "cutting-edge", "game-changer", "leverage" (as a verb), "unlock", "empower", "delve", "landscape", "tapestry", "testament", "pivotal", "crucial role", "plays a key role", "in today's", "it's worth noting", "it is important to note", "simply", "just" (as in "just run"), "easily".
 - No filler openers or closers: "In this section, we will", "Let's dive in", "In conclusion", "To sum up", "Happy hacking".
@@ -24,7 +24,7 @@ The section's `voice` in `guide.yaml` names one of these styles.
 ### concepts
 
 Explains what something is and why it is built that way, for a reader deciding whether and how to use it.
-- Lead with the purpose in one or two sentences, then the parts and how they interact.
+- Lead with the purpose in one or two sentences, then the parts and how they interact. On the start page and section overview pages, follow the shape in `overview-contract.md`.
 - Prefer a diagram reference over a long description of topology.
 - Compare with what the reader already knows only when the comparison is exact.
 - Short paragraphs (two to four sentences); no numbered steps.

@@ -19,6 +19,7 @@
 {{FORMAT_RULES}}
 - Admonitions: only NOTE, TIP, IMPORTANT, WARNING, CAUTION, with their fixed meanings (see `page-procedure.md`).
 - Task pages: a why-paragraph, numbered steps with copy-paste commands, `Check:` lines with expectations.
+- The start page and the section overview pages follow `overview-contract.md`: why before how, the spec's `## Why` card as their content, every product defined from its own pinned source, and the cold-reader test as their review gate.
 - Diagrams follow the diagrams skill; palette: platform gray (`#e9ecef`/`#495057`), governance orange (`#ffe8cc`/`#e8590c`), admin red (`#ffe3e3`/`#c92a2a`), user blue (`#d0ebff`/`#1971c2`); text and legends `#495057`.
 - Run every command from the guide project root with path arguments; never `cd` into `.guide/cache/`.
 - Containers: `podman`, never `docker`. Python packages: `uv`, never pip.

@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: relay
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  template:
+    spec:
+      containers:
+        - name: relay
+          image: ghcr.io/relay-project/relay@sha256:5f0c4a7d9e2b1c3a8f6e4d2b0a9c7e5f3d1b9a7c5e3f1d9b7a5c3e1f9d7b5a3c
+          ports:
+            - containerPort: 7400
+          volumeMounts:
+            - name: state
+              mountPath: /var/lib/relay
+      volumes:
+        - name: state
+          persistentVolumeClaim:
+            claimName: relay-state

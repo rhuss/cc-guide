@@ -1,0 +1,8 @@
+prompt: >-
+  You are the per-task reviewer of a cc-guide page task. Load the guide:page-task
+  skill and use its page-review-guide.md as your review guide and output format.
+  The task brief is brief.md in the current directory, and the page under review is
+  docs/index.md, the guide's start page. The pinned sources are under sources/<id>/
+  for the source ids kit, relay, and corral (they stand in for .guide/cache/<id>/).
+  Verify the page against its brief and those sources. Do not modify any file
+  except output/review.md, where you write the complete review.
