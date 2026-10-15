@@ -190,7 +190,7 @@ def test_invalid_branding_stops_before_antora(repo):
                           capture_output=True, text=True)
     assert proc.returncode == 1
     assert proc.stdout == ""
-    assert "guide.yaml:branding: set exactly one of logo_text or logo" in proc.stderr
+    assert "guide.yaml:branding: set exactly one of logo_text, wordmark, or logo" in proc.stderr
     assert "guide.yaml:branding.logo: file not found: branding/logo.svg" in proc.stderr
     assert not (repo / "build").exists()
 
@@ -236,3 +236,19 @@ def test_branded_linked_worktree_renders_the_worktree_files(repo):
     assert "Worktree Brand" in logo and "Main Brand" not in logo
     assert "WorktreeMarker" in (ui / "css" / "extra.css").read_text()
     assert not (repo / "build" / "branding").exists()
+
+
+# --- neutral theme (specs/003-neutral-branding T016) ------------------------------------------
+
+
+def test_neutral_guide_renders_through_playbook_cli(repo):
+    """playbook.py in its own PEP 723 environment renders outlined logos (fontTools)."""
+    write_guide(repo, {"wordmark": "OpenClaw on OpenShift", "theme": "neutral", "footer": "none"})
+    proc = subprocess.run(["uv", "run", "--quiet", "--no-project", str(TOOLKIT / "playbook.py"), "path",
+                           "--root", str(repo)], capture_output=True, text=True)
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stdout.strip() == str(repo.resolve() / "build" / "playbook.yml")
+    ui = repo / "build" / "branding" / "shareable" / "ui"
+    logo = (ui / "img" / "logo-guide.svg").read_text()
+    assert "<text" not in logo and "<path" in logo
+    assert (ui / "css" / "theme-neutral.css").is_file()

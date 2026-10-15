@@ -238,7 +238,8 @@ def test_branding_block_fails_for_other_formats(render_fixture_guide, fmt):
 
 def test_adapter_branding_list(tmp_guide):
     vendor_adapter(tmp_guide, "antora")
-    assert guidecfg.load_adapter(tmp_guide).branding == ["logo_text", "logo", "logo_alt", "footer", "favicon", "color"]
+    assert guidecfg.load_adapter(tmp_guide).branding == ["logo_text", "wordmark", "logo", "logo_alt", "footer",
+                                                         "favicon", "color", "theme"]
     (tmp_guide / "tools" / "guide" / "adapter.yaml").write_text("format: antora\n")
     assert guidecfg.load_adapter(tmp_guide).branding == []
     vendor_adapter(tmp_guide, "gfm")
@@ -305,3 +306,21 @@ def test_cli_validate_prints_shadowing_warning(render_fixture_guide):
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert ("ui/supplemental/partials/footer-content.hbs: warning: shadows the file generated for branding.footer"
             in proc.stdout.splitlines())
+
+
+def run_uv_validate(root: Path) -> subprocess.CompletedProcess:
+    """guidecfg.py validate in its own PEP 723 environment (pyyaml only), as guides run it."""
+    return subprocess.run(["uv", "run", "--quiet", "--no-project", str(TOOLKIT / "guidecfg.py"), "validate",
+                           "--root", str(root)], capture_output=True, text=True)
+
+
+def test_validate_neutral_branding_with_pyyaml_only(render_fixture_guide):
+    root = render_fixture_guide
+    vendor_adapter(root, "antora")
+    edit(root / "guide.yaml", lambda d: d.update(branding={"wordmark": "OpenClaw on OpenShift", "theme": "neutral"}))
+    proc = run_uv_validate(root)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    edit(root / "guide.yaml", lambda d: d["branding"].update(theme="dark"))
+    proc = run_uv_validate(root)
+    assert proc.returncode == 1
+    assert "guide.yaml:branding.theme: must be neutral or stock (got dark)" in proc.stdout

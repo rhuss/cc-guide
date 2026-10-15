@@ -7,8 +7,9 @@
 # the toolkit scripts with VERSION, the adapter descriptor (adapter.yaml), the
 # templates the toolkit renders (templates/), the validate allowlist
 # (readonly.yaml), and the adapter's branding assets (guide/adapters/<format>/branding/
-# as tools/guide/branding/, when the adapter has them: the logo template and the UI
-# bundle contract that tools/guide/branding.py reads). --toolkit-only refreshes only
+# as tools/guide/branding/, when the adapter has them: the logo template, the UI
+# bundle contract, and the vendored fonts that tools/guide/branding.py reads; the
+# maintainer script fonts/update-fonts.py stays in the plugin). --toolkit-only refreshes only
 # tools/guide/ (used by evolve).
 set -euo pipefail
 
@@ -76,7 +77,7 @@ cp "$plugin/validate/readonly.yaml" "$tools/readonly.yaml" 2>/dev/null || true
 # Branding assets of the adapter (Antora only). The rsync --delete above removed any
 # earlier copy, so a refresh always matches the plugin.
 if [[ -d "$adapter/branding" ]]; then
-  rsync -a --exclude '__pycache__' "$adapter/branding/" "$tools/branding/"
+  rsync -a --exclude '__pycache__' --exclude 'update-fonts.py' "$adapter/branding/" "$tools/branding/"
 fi
 
 echo "toolkit $(cat "$tools/VERSION" 2>/dev/null || echo unknown) installed in $tools"

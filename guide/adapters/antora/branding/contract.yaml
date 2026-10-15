@@ -47,9 +47,16 @@ rules:
   - id: head-order
     file: partials/head.hbs
     matches: ['head-styles\}\}[\s\S]*head-meta\}\}[\s\S]*head-icons\}\}']
-  - id: head-styles-site-css
+  # The stock head-styles.hbs: three Google Fonts links, then css/site.css. The neutral
+  # theme replaces it with the site.css link alone (no third-party font request), so the
+  # whole stock content is pinned.
+  - id: head-styles-stock
     file: partials/head-styles.hbs
-    contains: ['/css/site.css']
+    equals: |
+      <link rel="preconnect" href="https://fonts.googleapis.com">
+          <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+          <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Red+Hat+Display:wght@400;500;700&family=Red+Hat+Mono:wght@400;700&family=Red+Hat+Text:wght@400;700&display=swap">
+          <link rel="stylesheet" href="{{{uiRootPath}}}/css/site.css">
   # The overlay replaces these two partials wholesale; their stock content is the
   # favicon link only, which the replacements reproduce.
   - id: head-meta-stock
@@ -66,6 +73,18 @@ rules:
   - id: stock-logo
     file: img/logo-demo-platform.svg
     contains: ['viewBox="0 0 1080 178.739"', 'translate(308 149)', 'font-size="82"', '<tspan x="0" y="0">Demo Platform</tspan>']
+  # The neutral theme's @font-face rules use the family names the bundle's font stacks
+  # already name, so the stacks resolve to the vendored fonts without overrides.
+  - id: font-stacks
+    file: css/site.css
+    contains: ['Red Hat Text,RedHatText', 'Red Hat Display,RedHatDisplay', 'Red Hat Mono,RedHatMono']
+  # The neutral theme's red rule is an inset box shadow on the fixed navigation bar.
+  - id: navbar-rule
+    file: partials/header-content.hbs
+    contains: ['<nav class="navbar">']
+  - id: navbar-css
+    file: css/site.css
+    contains: ['.navbar{background:#151515', 'position:fixed']
 
 # The accent blue the color setting replaces, and its hover shade.
 accent_color: "#06c"

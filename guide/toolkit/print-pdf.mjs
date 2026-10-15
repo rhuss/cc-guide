@@ -21,6 +21,13 @@
 // "branding output missing for the <view> view; run make check". Without a branding
 // block the title page is unchanged (FR-027).
 //
+// Neutral theme (`theme: neutral`, specs/003-neutral-branding): branding.json also names
+// the vendored font directory and its faces. The print then sets body text in Red Hat
+// Text, headings, the title page, and the table of contents in Red Hat Display, and code
+// in Red Hat Mono, loading the fonts through file: URLs (remote fonts stay blocked), and
+// draws a red rule under the title band. A missing font file stops the print with the
+// same "branding output missing" message. Without the theme the print CSS is unchanged.
+//
 // Page detection: --page-heading selects the heading that starts each guide page and
 // --section-heading the navigation section headings. Without them the Antora
 // html-single structure is detected (section = .sect1 > h2, page = .sect2 > h3);
@@ -298,7 +305,29 @@ function transformDocument(args) {
   return { errors, pages: pages.length, links, rewritten, titles: pages.map((h) => h.textContent.trim()) };
 }
 
-// The rendered logo and alt text of a branded guide (build/branding/<view>/branding.json).
+// Print CSS for the neutral theme: the vendored faces through file: URLs, the Red Hat
+// typography, and the red rule under the title band (FR-018, FR-019). `body *` reaches
+// elements with their own font (Asciidoctor's serif italic block titles); the heading and
+// code rules come later with the same specificity and win. Pseudo-elements (the
+// admonition labels) and the page-number footer keep their Helvetica. Chromium embeds the
+// variable fonts as unnamed Type3 fonts. Asciidoctor sets headings to weight 300, which
+// the stock serif fallback never had; Red Hat Display has it and looks too thin in print,
+// so headings use 500, the wordmark's weight.
+function neutralCss(brand) {
+  const faces = brand.faces.map((f) => `@font-face { font-family: "${f.family}"; `
+    + `src: url("${pathToFileURL(join(brand.fonts, f.file)).href}") format("woff2"); `
+    + `font-weight: ${f.weight[0]} ${f.weight[1]}; font-style: ${f.style}; }`);
+  return `${faces.join('\n')}
+body, body * { font-family: "Red Hat Text", sans-serif !important; }
+h1, h2, h3, h4, h5, h6, .guide-title-page, .guide-title-page *, .guide-toc, .guide-toc * { font-family: "Red Hat Display", sans-serif !important; }
+pre, pre *, code, kbd, samp { font-family: "Red Hat Mono", monospace !important; }
+h1, h2, h3, h4, h5, h6, .guide-title-page h1 { font-weight: 500 !important; }
+.guide-brand-band { border-bottom: 3px solid #e00 !important; }
+`;
+}
+
+// The rendered logo and alt text of a branded guide (build/branding/<view>/branding.json),
+// and for the neutral theme the vendored font directory and faces.
 function readBrand(root, view) {
   const missing = new Error(`branding output missing for the ${view} view; run make check`);
   let info;
@@ -309,7 +338,14 @@ function readBrand(root, view) {
   }
   if (!info || typeof info.logo !== 'string' || !existsSync(info.logo)) throw missing;
   const data = readFileSync(info.logo).toString('base64');
-  return { src: `data:image/svg+xml;base64,${data}`, alt: escapeHtml(info.alt || '') };
+  const brand = { src: `data:image/svg+xml;base64,${data}`, alt: escapeHtml(info.alt || ''), neutral: false };
+  if (info.theme === 'neutral') {
+    const faces = Array.isArray(info.font_faces) ? info.font_faces : [];
+    if (typeof info.fonts !== 'string' || !faces.length
+        || !faces.every((f) => existsSync(join(info.fonts, String(f.file))))) throw missing;
+    Object.assign(brand, { neutral: true, fonts: info.fonts, faces });
+  }
+  return brand;
 }
 
 async function main() {
@@ -357,6 +393,7 @@ async function main() {
     page.on('pageerror', (e) => pageErrors.push(String(e)));
     await page.goto(pathToFileURL(html).href, { waitUntil: 'load', timeout: 120000 });
     await page.addStyleTag({ content: PRINT_CSS });
+    if (meta.brand && meta.brand.neutral) await page.addStyleTag({ content: neutralCss(meta.brand) });
     const result = await page.evaluate(transformDocument, {
       meta, pageHeading: opts.pageHeading || null, sectionHeading: opts.sectionHeading || null, hide: opts.hide || null,
     });
@@ -380,6 +417,25 @@ async function main() {
     const shown = broken.map((src) => (src && src.startsWith('data:') ? `${src.slice(0, 40)}...` : src));
     if (broken.length) throw new Error(`images failed to load: ${shown.join(', ')}`);
     await page.emulateMedia({ media: 'print' });
+    // The vendored faces load only when layout first needs them, so document.fonts.ready
+    // alone can resolve before they arrive: load every face explicitly, then print. Each
+    // face settles on its own within 15 s; a corrupt file rejects (a NetworkError) and a
+    // face no @font-face matches resolves empty. Both name the face and its file.
+    if (meta.brand && meta.brand.neutral) {
+      const failed = await page.evaluate(async (faces) => {
+        const timeout = () => new Promise((_, reject) => setTimeout(() => reject(new Error('timed out after 15 s')), 15000));
+        const results = await Promise.allSettled(faces.map((f) => Promise.race([
+          document.fonts.load(`${f.style} 16px "${f.family}"`), timeout()])));
+        return results.map((r, i) => {
+          if (r.status === 'rejected') return `${faces[i].family} ${faces[i].style} (${faces[i].file}): ${r.reason && r.reason.message ? r.reason.message : r.reason}`;
+          return r.value.length ? null : `${faces[i].family} ${faces[i].style} (${faces[i].file}): no matching @font-face`;
+        }).filter(Boolean);
+      }, meta.brand.faces);
+      if (failed.length) {
+        throw new Error(`vendored fonts failed to load: ${failed.join('; ')}; refresh the toolkit and run make check`);
+      }
+      await page.evaluate(() => document.fonts.ready);
+    }
     const label = escapeHtml(title) + (internal ? ' &middot; INTERNAL: do not share outside the internal audience' : '');
     await page.pdf({
       path: tmp,

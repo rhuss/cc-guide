@@ -69,15 +69,21 @@ upstream:
   target: github
 
 # Branding (antora format only; MkDocs and gfm guides fail validation with this block).
-# Without it the guide keeps the stock Red Hat Demo Platform look. Set exactly one of
-# logo_text or logo. logo_text renders the Red Hat logo (the Red Hat hat, a divider,
-# and the text) and is meant for guides about Red Hat products; a guide about another
-# product uses its own SVG logo (logo, with logo_alt). Paths are relative to the guide
-# root, for example files in branding/. The accent color and the overlay directory
-# ui/supplemental/ are described in the plugin's docs/branding.md.
+# /guide:create writes it for every Antora guide; without it the guide shows the stock
+# Red Hat Demo Platform look. Set exactly one of logo_text, wordmark, or logo.
+# logo_text renders the Red Hat logo (the Red Hat hat, a divider, and the text) and is
+# meant for guides about Red Hat products; wordmark is a text logo without the hat for
+# any other guide; logo is your own SVG (with logo_alt). theme: neutral adds the
+# vendored Red Hat fonts and a red rule under the header (stock, the default, keeps the
+# bundle as it is). Paths are relative to the guide root, for example files in
+# branding/. The accent color and the overlay directory ui/supplemental/ are described
+# in the plugin's docs/branding.md.
 # branding:
-#   logo_text: Agent Starter Kits        # or: logo: branding/logo.svg (then logo_alt is required)
+#   logo_text: Agent Starter Kits        # or: wordmark: OpenClaw on OpenShift (no Red Hat hat)
+#                                        # or: logo: branding/logo.svg (then logo_alt is required)
 #   logo_alt: Red Hat Agent Starter Kits # optional with logo_text (default "Red Hat <logo_text>")
+#                                        # and wordmark (default: the wordmark)
+#   theme: neutral                       # neutral | stock (default)
 #   footer:                              # rhdp | none | {text, url}; default none
 #     text: Agent Starter Kits on GitHub
 #     url: https://github.com/red-hat-data-services/agentic-starter-kits

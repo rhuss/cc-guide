@@ -32,7 +32,7 @@ uninstall:
 reinstall: uninstall install
 
 test:
-	uv run --no-project --with pytest --with pyyaml --with pypdf --with pillow pytest tests/toolkit
+	uv run --no-project --with pytest --with pyyaml --with pypdf --with pillow --with 'fonttools[woff]==4.67.0' pytest tests/toolkit
 
 test-adapters:
 	@fail=0; for t in $(ADAPTER_TESTS); do \

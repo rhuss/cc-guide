@@ -18,7 +18,7 @@ content_root: content
 internal_root: internal
 page_glob: "modules/*/pages/**/*.adoc"
 comment: line
-branding: [logo_text, logo, logo_alt, footer, favicon, color]
+branding: [logo_text, wordmark, logo, logo_alt, footer, favicon, color, theme]
 """
 
 MKDOCS_ADAPTER = """format: mkdocs
@@ -535,3 +535,104 @@ def test_own_footer_partial_exempts_only_branded_pages(branded_site):
                         views=("site",))
     write(root, "ui/supplemental/partials/footer-content.hbs", '<footer class="footer"><p>mine</p></footer>\n')
     assert "Red Hat Demo Platform notice still present" in [v.message for v in site_check(root)]
+
+
+# --- neutral theme check (specs/003-neutral-branding FR-026, FR-027, T015) ------------------
+
+import branding  # noqa: E402
+
+THEME_LINK = '<link rel="stylesheet" href="{up}_/css/theme-neutral.css">'
+NEUTRAL_BLOCK = {"wordmark": "OpenClaw on OpenShift", "theme": "neutral", "footer": "none"}
+
+
+def neutral_page(up: str = "../", theme: bool = True, **kw) -> str:
+    kw.setdefault("logo", f"{up}_/img/logo-guide.svg")
+    kw.setdefault("alt", "OpenClaw on OpenShift")
+    kw.setdefault("footer", '<footer class="footer"></footer>')
+    html = page_html(**kw)
+    head = THEME_LINK.format(up=up) if theme else ""
+    return html.replace("<html>", f"<html><head>{head}</head>", 1)
+
+
+def add_fonts(root, view, skip=()):
+    names = [e["file"] for e in branding.load_manifest()["files"]] + ["OFL.txt"]
+    for name in names:
+        if name not in skip:
+            write(root, f"build/{view}/_/font/{name}", "x")
+
+
+def neutral_check(root):
+    return check.check_neutral_theme(root, guidecfg.load_guide(root))
+
+
+def test_neutral_theme_passes(branded_site):
+    root = branded_site(block=NEUTRAL_BLOCK, pages={
+        "guide/index.html": neutral_page(),
+        "guide/user/start.html": neutral_page(up="../../"),
+        "index.html": "<!DOCTYPE html><html><head><meta http-equiv=\"refresh\"></head></html>",
+        "guide/_exports/print.html": "<html></html>"})
+    for view in ("site", "site-internal"):
+        add_fonts(root, view)
+    assert neutral_check(root) == []
+    assert site_check(root) == []                    # the wordmark alt satisfies FR-032 (FR-027)
+
+
+def test_neutral_theme_link_missing(branded_site):
+    root = branded_site(block=NEUTRAL_BLOCK, views=("site",),
+                        pages={"guide/index.html": neutral_page(), "guide/other.html": neutral_page(theme=False)})
+    add_fonts(root, "site")
+    (v,) = neutral_check(root)
+    assert str(v) == "build/site/guide/other.html:0: [branding] page does not load the neutral theme"
+
+
+def test_neutral_theme_font_missing(branded_site):
+    root = branded_site(block=NEUTRAL_BLOCK, views=("site",), pages={"guide/index.html": neutral_page()})
+    add_fonts(root, "site", skip=("OFL.txt",))
+    (v,) = neutral_check(root)
+    assert str(v) == "build/site:0: [branding] neutral theme font missing: OFL.txt"
+
+
+def test_neutral_theme_internal_view_only_when_enabled(branded_site):
+    root = branded_site(block=NEUTRAL_BLOCK, pages={"guide/index.html": neutral_page(theme=False)})
+    add_fonts(root, "site")
+    add_fonts(root, "site-internal")
+    assert {v.path for v in neutral_check(root)} == {"build/site/guide/index.html",
+                                                    "build/site-internal/guide/index.html"}
+    path = root / "guide.yaml"
+    data = yaml.safe_load(path.read_text())
+    data["internal"]["enabled"] = False
+    path.write_text(yaml.safe_dump(data, sort_keys=False))
+    assert {v.path for v in neutral_check(root)} == {"build/site/guide/index.html"}
+
+
+@pytest.mark.parametrize("block", [{"logo_text": "Agent Starter Kits"},
+                                   {"logo_text": "Agent Starter Kits", "theme": "stock"},
+                                   {"wordmark": "OpenClaw"}])
+def test_neutral_theme_skipped_without_neutral(branded_site, block):
+    root = branded_site(block=block, pages={"guide/index.html": page_html()})
+    assert neutral_check(root) == []
+
+
+def test_neutral_theme_google_fonts_fail(branded_site):
+    google = '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Red+Hat+Text">'
+    page = neutral_page().replace("<head>", f"<head>{google}", 1)
+    root = branded_site(block=NEUTRAL_BLOCK, views=("site",), pages={"guide/index.html": page})
+    add_fonts(root, "site")
+    (v,) = neutral_check(root)
+    assert str(v) == "build/site/guide/index.html:0: [branding] page still loads Google Fonts"
+
+
+def test_neutral_theme_view_without_header_fails_once(branded_site):
+    """A UI bundle that ignores the overlay renders no header logo: the branded-site check
+    reports it, the neutral check does not repeat it."""
+    root = branded_site(block=NEUTRAL_BLOCK, views=("site",), pages={"guide/index.html": page_html(header=False)})
+    add_fonts(root, "site")
+    assert neutral_check(root) == []
+    assert [str(v) for v in site_check(root)] == ["build/site:0: [branding] no page shows the branded logo"]
+
+
+def test_neutral_theme_skipped_for_invalid_block(branded_site):
+    root = branded_site(block=dict(NEUTRAL_BLOCK, logo_text="Both"), views=("site",),
+                        pages={"guide/index.html": neutral_page(theme=False)})
+    assert neutral_check(root) == []
+    assert any("set exactly one of" in v.message for v in site_check(root))

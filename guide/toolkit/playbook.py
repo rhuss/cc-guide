@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["pyyaml"]
+# dependencies = ["pyyaml", "fonttools[woff]==4.67.0"]
 # ///
 """The Antora playbook a build uses: branding, overlay, and linked worktrees (FR-016a).
 

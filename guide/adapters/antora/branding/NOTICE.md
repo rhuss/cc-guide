@@ -18,4 +18,18 @@ License, v. 2.0. If a copy of the MPL was not distributed with this
 file, You can obtain one at https://mozilla.org/MPL/2.0/.
 ```
 
+## Red Hat fonts
+
+The `fonts/` directory holds the variable web fonts of the Red Hat font family, release 5.0.0, and their license:
+
+- Upstream repository: https://github.com/RedHatOfficial/RedHatFont
+- License: SIL Open Font License, Version 1.1 (`fonts/OFL.txt`)
+- Files: `RedHatDisplay-VF.woff2`, `RedHatDisplay-Italic-VF.woff2`, `RedHatText-VF.woff2`, `RedHatText-Italic-VF.woff2`, `RedHatMono-VF.woff2`, `RedHatMono-Italic-VF.woff2`, unchanged; their checksums are in `fonts/fonts.yaml`
+
+The fonts are covered by the OFL, not by the license of this plugin. A guide with `theme: neutral` publishes them under `_/font/` in its built site, always together with `OFL.txt`. Logos with outlined text (`wordmark`, and `logo_text` with `theme: neutral`) are a rendering of Red Hat Display glyphs into SVG paths; they are documents made with the fonts, not modified versions of the fonts.
+
+`fonts/update-fonts.py` downloads a release and rewrites `fonts/fonts.yaml`; it stays in the plugin and is not copied into guide projects.
+
+## Trademark
+
 The Red Hat logo is a trademark of Red Hat, Inc. The `logo_text` setting renders it and is meant for guides about Red Hat products; guides about other products use their own `logo` (see `guide/docs/branding.md`).

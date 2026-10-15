@@ -42,5 +42,6 @@ attributes: antora-attribute
 preview_port: 8000
 
 # Branding keys this adapter supports (specs/002-antora-branding/data-model.md, adapter
-# branding capability). guide.yaml `branding` keys outside this list fail validation.
-branding: [logo_text, logo, logo_alt, footer, favicon, color]
+# branding capability; wordmark and theme from specs/003-neutral-branding). guide.yaml
+# `branding` keys outside this list fail validation.
+branding: [logo_text, wordmark, logo, logo_alt, footer, favicon, color, theme]

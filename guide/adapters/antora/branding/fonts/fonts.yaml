@@ -1,0 +1,87 @@
+# Written by update-fonts.py; do not edit by hand. Read by tools/guide/branding.py.
+release: 5.0.0
+commit: 6bb1048a6402b0076ea04f42951ec66263cd1437
+repository: https://github.com/RedHatOfficial/RedHatFont
+license: OFL-1.1
+ofl_sha256: 4f1417e27511207cd217656c964f1b0d8b0c4a30156a1a699cf16dc5eba0dff6
+files:
+- file: RedHatDisplay-VF.woff2
+  upstream: fonts/Proportional/RedHatDisplay/webfonts/RedHatDisplay-VF.woff2
+  sha256: 69dca56dda2a2b067dee3e910323c97e54b8544f90f3d1c2192b5a37c0eb1ec3
+  family: Red Hat Display
+  style: normal
+  weight: [300, 900]
+- file: RedHatDisplay-Italic-VF.woff2
+  upstream: fonts/Proportional/RedHatDisplay/webfonts/RedHatDisplay-Italic-VF.woff2
+  sha256: ad58f7fcae1bb271807d629e3d7bf370be17b13436c1753720db1f389d8cc114
+  family: Red Hat Display
+  style: italic
+  weight: [300, 900]
+- file: RedHatText-VF.woff2
+  upstream: fonts/Proportional/RedHatText/webfonts/RedHatText-VF.woff2
+  sha256: 1a5c9a8a88447c5b171ae99dab5daa4c1d49e3502db0fdc0da65d59fc5603feb
+  family: Red Hat Text
+  style: normal
+  weight: [300, 700]
+- file: RedHatText-Italic-VF.woff2
+  upstream: fonts/Proportional/RedHatText/webfonts/RedHatText-Italic-VF.woff2
+  sha256: 97b89f470394820fd11c803b65c7272fe193e179adea956e0ac3495e290c6dd4
+  family: Red Hat Text
+  style: italic
+  weight: [300, 700]
+- file: RedHatMono-VF.woff2
+  upstream: fonts/Mono/RedHatMono/webfonts/RedHatMono-VF.woff2
+  sha256: 54145e1e268b1c5359966336a6b6b12a5dfa046e493d3b4f2dc620c5edd12b62
+  family: Red Hat Mono
+  style: normal
+  weight: [300, 700]
+- file: RedHatMono-Italic-VF.woff2
+  upstream: fonts/Mono/RedHatMono/webfonts/RedHatMono-Italic-VF.woff2
+  sha256: d5d585590a2439bbb5429863b2c11bc76512bfb37e60fc5696462e1866bfc2c1
+  family: Red Hat Mono
+  style: italic
+  weight: [300, 700]
+display_coverage:
+- [13, 13]
+- [32, 126]
+- [160, 172]
+- [174, 318]
+- [321, 328]
+- [330, 382]
+- [536, 539]
+- [567, 567]
+- [699, 700]
+- [710, 711]
+- [728, 733]
+- [768, 772]
+- [774, 776]
+- [778, 780]
+- [786, 786]
+- [806, 808]
+- [7808, 7813]
+- [7838, 7838]
+- [7922, 7923]
+- [8194, 8195]
+- [8201, 8203]
+- [8211, 8213]
+- [8216, 8218]
+- [8220, 8222]
+- [8224, 8226]
+- [8230, 8230]
+- [8240, 8240]
+- [8242, 8243]
+- [8249, 8250]
+- [8260, 8260]
+- [8304, 8304]
+- [8308, 8313]
+- [8320, 8329]
+- [8364, 8364]
+- [8482, 8482]
+- [8593, 8593]
+- [8595, 8595]
+- [8722, 8722]
+- [8725, 8725]
+- [8800, 8800]
+- [64257, 64258]
+- [65279, 65279]
+- [65533, 65533]

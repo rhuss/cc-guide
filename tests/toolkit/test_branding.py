@@ -52,15 +52,15 @@ def test_minimal_logo_text_block_passes(proj):
 
 def test_both_logo_keys_fail(proj):
     assert_problem(proj, {"logo_text": "X", "logo": "branding/logo.svg", "logo_alt": "X"},
-                   "guide.yaml:branding", "set exactly one of logo_text or logo")
+                   "guide.yaml:branding", "set exactly one of logo_text, wordmark, or logo")
 
 
 def test_neither_logo_key_fails(proj):
-    assert_problem(proj, {"footer": "none"}, "guide.yaml:branding", "set exactly one of logo_text or logo")
+    assert_problem(proj, {"footer": "none"}, "guide.yaml:branding", "set exactly one of logo_text, wordmark, or logo")
 
 
 def test_empty_block_fails_for_antora(proj):
-    assert_problem(proj, {}, "guide.yaml:branding", "set exactly one of logo_text or logo")
+    assert_problem(proj, {}, "guide.yaml:branding", "set exactly one of logo_text, wordmark, or logo")
 
 
 @pytest.mark.parametrize("text", ["", "   ", "Agent\nStarter", "x" * 41])
@@ -341,7 +341,7 @@ def test_cli_validate(proj):
     cmd = [sys.executable, str(TOOLKIT / "branding.py"), "validate", "--root", str(proj)]
     bad = subprocess.run(cmd, capture_output=True, text=True)
     assert bad.returncode == 1
-    assert "guide.yaml:branding: set exactly one of logo_text or logo" in bad.stdout
+    assert "guide.yaml:branding: set exactly one of logo_text, wordmark, or logo" in bad.stdout
     write_guide(proj, "antora", {"logo_text": "X"})
     ok = subprocess.run(cmd, capture_output=True, text=True)
     assert ok.returncode == 0, ok.stdout + ok.stderr
@@ -885,16 +885,21 @@ def test_template_branding_example_validates(tmp_path):
 
 
 def test_create_intake_states_the_branding_rules():
-    # FR-028, FR-030: the intake asks only for Antora, says logo_text renders the Red Hat
-    # logo for Red Hat products, copies own files into branding/, and leaves out color.
+    # FR-028, FR-030 (spec 002) as revised by spec 003 FR-021 to FR-023: the intake asks
+    # only for Antora, decides hat or wordmark from one question, always writes the
+    # neutral theme, never offers the RHDP look, copies own files into branding/, and
+    # leaves out color.
     skill = (REPO / "guide" / "skills" / "create" / "SKILL.md").read_text()
     intake = skill[skill.index("**Branding** (Antora only"):]
     intake = intake[:intake.index("\n6. ")]
     assert "do not ask for `mkdocs` or `gfm`" in intake
-    assert "Red Hat products" in intake and "own logo file" in intake
-    assert "Alt text" in intake and "required for an own logo file" in intake
-    assert "Favicon" in intake and "Footer" in intake
-    assert "accent color (`color`) and the overlay directory `ui/supplemental/` are not part of the intake" in intake
+    assert '**"Is this guide about a Red Hat product?"**' in intake
+    assert "`logo_text`" in intake and "`wordmark`" in intake and "`theme: neutral`" in intake
+    assert "Propose the guide title when it has at most 40 characters" in intake
+    assert "**Own logo**" in intake and "(`logo_alt`, required" in intake
+    assert "**Favicon**" in intake and "**Footer**" in intake
+    assert "Do not offer the Red Hat Demo Platform look" in intake
+    assert "The accent color (`color`) and the overlay directory `ui/supplemental/` are not part of the intake" in intake
     assert "Copy an own logo or favicon file into `GUIDE/branding/`" in skill
     docs = (REPO / "guide" / "docs" / "branding.md").read_text()
-    assert "It is meant for guides about Red Hat products. A guide about another product uses its own `logo` instead." in docs
+    assert "It is meant for guides about Red Hat products. A guide about another product uses `wordmark` or its own `logo` instead." in docs

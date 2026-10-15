@@ -81,6 +81,29 @@ def test_toolkit_only_refresh_restores_branding_assets(tmp_path):
     assert (branding / "contract.yaml").read_text().endswith("# changed in the plugin\n")
 
 
+FONT_FILES = ["fonts.yaml", "OFL.txt", "RedHatDisplay-VF.woff2", "RedHatDisplay-Italic-VF.woff2",
+              "RedHatText-VF.woff2", "RedHatText-Italic-VF.woff2", "RedHatMono-VF.woff2",
+              "RedHatMono-Italic-VF.woff2"]
+
+
+def assert_fonts_vendored(plugin: Path, guide: Path) -> None:
+    fonts = guide / "tools" / "guide" / "branding" / "fonts"
+    for name in FONT_FILES:
+        assert (fonts / name).read_bytes() == (plugin / "adapters/antora/branding/fonts" / name).read_bytes(), name
+    assert not (fonts / "update-fonts.py").exists()     # maintainer tool, never vendored
+
+
+def test_antora_scaffold_vendors_fonts_without_maintainer_script(tmp_path):
+    plugin = plugin_copy(tmp_path)
+    guide = tmp_path / "g"
+    assert run(plugin / "scripts/scaffold-project.sh", "--format", "antora", "--title", "T", guide).returncode == 0
+    assert_fonts_vendored(plugin, guide)
+    shutil.rmtree(guide / "tools" / "guide" / "branding" / "fonts")
+    proc = run(plugin / "scripts/scaffold-project.sh", "--format", "antora", "--toolkit-only", guide)
+    assert proc.returncode == 0, proc.stderr
+    assert_fonts_vendored(plugin, guide)
+
+
 def test_gfm_scaffold_has_no_branding_assets(tmp_path):
     plugin = plugin_copy(tmp_path)
     guide = tmp_path / "g"

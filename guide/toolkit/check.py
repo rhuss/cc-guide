@@ -14,7 +14,9 @@ For a branded Antora guide (a guide.yaml `branding` block), the built views
 (build/site, and build/site-internal while the internal part is enabled) must show
 the branded header logo with its alt text on every page, and no footer may still
 carry the Red Hat Demo Platform notice unless `footer` is `rhdp` (FR-032, rule
-`branding`).
+`branding`). With `theme: neutral`, every page of those views must also load
+css/theme-neutral.css and no Google Fonts stylesheet, and _/font/ must hold the
+vendored fonts and OFL.txt (specs/003-neutral-branding FR-026).
 Per-guide rules come from the optional guide-rules.yaml:
 
   rules:
@@ -344,6 +346,8 @@ def check_structure(root: Path, guide: guidecfg.Guide, adapter: guidecfg.Adapter
 
 IMG_TAG_RE = re.compile(r"<img\b[^>]*>", re.I)
 ATTR_RE = re.compile(r'\b([\w-]+)\s*=\s*"([^"]*)"')
+GOOGLE_FONTS = ("fonts.googleapis.com", "fonts.gstatic.com")   # the stock head-styles.hbs links
+LINK_TAG_RE = re.compile(r"<link\b[^>]*>", re.I)
 FOOTER_RE = re.compile(r'<footer\b[^>]*class="[^"]*\bfooter\b[^"]*"[^>]*>([\s\S]*?)</footer>', re.I)
 STOCK_NOTICE = ("demo.redhat.com", "Demo Platform")
 STOCK_NOTICE_MARKER = 'class="poweredBy"'          # the stock footer's link (contract rule footer-partial)
@@ -432,6 +436,53 @@ def check_branded_site(root: Path, guide: guidecfg.Guide) -> list[Violation]:
                         break
         if not shown:
             out.append(Violation(f"build/{view}", 0, "branding", "no page shows the branded logo"))
+    return out
+
+
+def _shows_logo(tag: str) -> bool:
+    return "navbar-logo-img" in dict(ATTR_RE.findall(tag)).get("class", "").split()
+
+
+def check_neutral_theme(root: Path, guide: guidecfg.Guide) -> list[Violation]:
+    """Built views of a guide with `theme: neutral` that do not carry the theme (FR-026).
+
+    Every page with a header logo (a UI page; Antora's start page redirect has none)
+    must link css/theme-neutral.css and no Google Fonts host, and build/<view>/_/font/
+    must hold the vendored fonts and OFL.txt. A view where no page has the header (a UI
+    bundle that ignores the overlay) is reported by check_branded_site ("no page shows
+    the branded logo"), not twice. Views, skipped pages, the internal view, and an invalid
+    branding block (also reported there) follow check_branded_site. An author's ui/supplemental/css/theme-neutral.css counts, since
+    the generated head-meta.hbs still links it.
+    """
+    root = Path(root)
+    if not isinstance(guide.branding, dict) or guide.branding.get("theme") != "neutral":
+        return []
+    raw, fmt = branding.load_block(root)
+    problems, _ = branding.check(root, raw, fmt, branding.adapter_keys(root, fmt))
+    if problems:
+        return []
+    names = branding.font_files()
+    views = ("site", "site-internal") if guide.internal_enabled else ("site",)
+    out: list[Violation] = []
+    for view in views:
+        base = root / "build" / view
+        pages = sorted(p for p in base.rglob("*.html") if "_exports" not in p.relative_to(base).parts) \
+            if base.is_dir() else []
+        if not pages:
+            continue
+        for page in pages:
+            text = page.read_text(errors="replace")
+            if not any(_shows_logo(tag) for tag in IMG_TAG_RE.findall(text)):
+                continue
+            links = [dict(ATTR_RE.findall(tag)).get("href", "") for tag in LINK_TAG_RE.findall(text)]
+            rel = f"build/{view}/{page.relative_to(base).as_posix()}"
+            if not any(href.endswith(branding.THEME_CSS) for href in links):
+                out.append(Violation(rel, 0, "branding", "page does not load the neutral theme"))
+            if any(host in href for href in links for host in GOOGLE_FONTS):
+                out.append(Violation(rel, 0, "branding", "page still loads Google Fonts"))
+        for name in names:
+            if not (base / "_" / branding.FONT_DIR / name).is_file():
+                out.append(Violation(f"build/{view}", 0, "branding", f"neutral theme font missing: {name}"))
     return out
 
 
@@ -549,6 +600,7 @@ def check_pages(root: Path, guide: guidecfg.Guide, baseline: guidecfg.Baseline,
     out.extend(_check_rules(root))
     if adapter.format == "antora" and guide.branding is not None:
         out.extend(check_branded_site(root, guide))
+        out.extend(check_neutral_theme(root, guide))
     if structure:
         out.extend(check_structure(root, guide, adapter))
     return out
