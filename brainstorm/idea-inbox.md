@@ -64,3 +64,30 @@ Ideas captured from code reviews for future brainstorming.
 - **Summary**: The FR-010 "validate before the generator runs" guard lives in three unrelated modules (playbook.py, mkdocs_macros.py, attrs.py regions).
 
 > Unchanged Makefiles force the design; a single `branding.guard(root)` helper and a table of hook points in docs/adapters.md would make a fourth adapter or entry point harder to forget.
+
+### reference-table-generation
+
+- **Source**: adoption
+- **Date**: 2026-10-13
+- **Reference**: saw-guide-adoption
+- **Summary**: The SAW guide's retired gen-reference.sh auto-generated per-chart reference tables (key, default, meaning) from each chart's values.yaml at the baseline; cc-guide has no equivalent.
+
+> The generator paired a hand-maintained meanings file (one reference-voice sentence per value, derived from the values.yaml comment) with the chart defaults to emit include-able reference partials, keeping a large "chart values" reference page in sync with the pinned sources. After adoption those partials become hand-maintained and drift from the baseline silently. A toolkit feature (for example `tools/guide/reference.py` rendering `reference-meanings.yaml` + source values into partials, checked by `make check`) would restore single-source reference tables for config-heavy guides.
+
+### citation-repointing-on-bump
+
+- **Source**: adoption
+- **Date**: 2026-10-13
+- **Reference**: saw-guide-adoption
+- **Summary**: The SAW guide's retired repoint_sources.py mechanically shifted cited source line ranges after a baseline bump and flagged only citations whose lines genuinely changed or whose files moved for human re-verification; evolve re-verifies every impacted page via subagents but does no mechanical line-shift.
+
+> On a bump where most cited files only shifted by a few lines, a mechanical re-pointer (diff old->new commit, shift unchanged hunks, mark REVIEW for changed/deleted) sharply narrows what a human or subagent must re-check, and keeps `// Sources:` line ranges accurate without a full re-read. A `tools/guide/repoint.py` run before the evolve page tasks would cut evolve cost on large, slow-moving guides.
+
+### reader-facing-prose-no-process-narration
+
+- **Source**: author-review
+- **Date**: 2026-10-27
+- **Reference**: cc-rosa-guide
+- **Summary**: Generated pages narrated the guide's own creation in rendered prose: claim-ledger references ("every claim traces to a source recorded in the claim ledger"), pinned commit hashes ("the plugin is described at commit X"), and an "internal knowledge" marking convention repeated on dozens of facts.
+
+> The strict-rigor machinery (claim ledger, pinned sources, registered inputs) is maintainer-facing and already lives in non-rendering `//` source comments and the ledger page, but nothing stops it from leaking into reader-facing prose. A reader cares what the guide states and how much to trust it, not how the guide was verified. Worth adding to the toolkit: page-task brief guidance that provenance belongs in `//` comments only, plus a check (guide-rules forbid patterns such as "claim ledger", "internal knowledge", or commit-short attributes outside the Baseline note) so the leak fails `make check`. Uncertainty should surface as a reader-relevant hedge ("unconfirmed", "reported by the team") rather than a provenance label. The Baseline note stays as the single standardized statement of covered versions. Fixed by hand in the cc-rosa guide (16 files); the idea is to make the toolkit prevent it.
