@@ -19,8 +19,8 @@ BUILD = attrs=$$($(UV) run --quiet $(TOOLS)/attrs.py export --format antora) || 
 	playbook=$$($(UV) run --quiet $(TOOLS)/playbook.py path $(1)) || exit 1; \
 	eval "$(ANTORA) $$attrs \"$$playbook\""
 # The PDF file for a view (shareable or internal), as the shell variable out.
-PDF_OUT = slug=$$($(GET) slug) && date=$$($(GET) baseline.captured) || exit 1; \
-	if [ "$(1)" = internal ]; then out=dist/$$slug-$$date-INTERNAL.pdf; else out=dist/$$slug-$$date.pdf; fi
+PDF_OUT = slug=$$($(GET) slug) || exit 1; \
+	if [ "$(1)" = internal ]; then out=dist/$$slug-INTERNAL.pdf; else out=dist/$$slug.pdf; fi
 
 .PHONY: help doctor fetch-baseline site site-internal check preview pdf print-pdf dist drift clean
 
