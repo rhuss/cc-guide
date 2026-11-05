@@ -23,8 +23,8 @@ For each format (`antora`, `mkdocs`, `gfm`), `make test-adapters` scaffolds the 
 
 ```bash
 make doctor check                 # passes
-make pdf                          # dist/sample-guide-<date>.pdf exists
-make pdf VIEW=internal            # dist/sample-guide-<date>-INTERNAL.pdf, footer marked
+make pdf                          # dist/sample-guide.pdf exists
+make pdf VIEW=internal            # dist/sample-guide-INTERNAL.pdf, footer marked
 ```
 
 Expected:

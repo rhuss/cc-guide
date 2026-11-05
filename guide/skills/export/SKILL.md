@@ -22,7 +22,7 @@ One PDF of the guide, built from the same content as the site (FR-030a to FR-030
    make pdf VIEW=<shareable|internal>
    ```
 
-   The target runs `make check` first and refuses to print when any content check or the leak check fails; it then produces the adapter's print HTML (Antora html-single export, the MkDocs print-site page, or a Pandoc assembly of the gfm pages in `docs/SUMMARY.md` order) and prints it with `tools/guide/print-pdf.mjs`. For the shareable view it leak-checks the PDF and deletes it on a leak. The file is `dist/<guide-slug>-<baseline-date>.pdf` (`-INTERNAL` added for the internal view).
+   The target runs `make check` first and refuses to print when any content check or the leak check fails; it then produces the adapter's print HTML (Antora html-single export, the MkDocs print-site page, or a Pandoc assembly of the gfm pages in `docs/SUMMARY.md` order) and prints it with `tools/guide/print-pdf.mjs`. For the shareable view it leak-checks the PDF and deletes it on a leak. The file is `dist/<guide-slug>.pdf` (`dist/<guide-slug>-INTERNAL.pdf` for the internal view), a stable name that each export overwrites.
 4. On failure, no PDF remains (the printer writes to a temporary file and renames it only on success). Name the cause from the output: the failing check with page and line, the leaked term, or the missing tool and its install hint. Never hand out a partial PDF.
 5. `--out PATH`: after a successful build, move the PDF there (keep the `-INTERNAL` marker in the name for the internal view; add it when the given name lacks it).
 6. Report the path, the page count (`uv run --with pypdf python -c "import pypdf,sys; print(len(pypdf.PdfReader(sys.argv[1]).pages))" <pdf>`), the view, and for the internal view repeat the sharing warning.
