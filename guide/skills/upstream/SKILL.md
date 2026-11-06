@@ -18,7 +18,7 @@ Findings live in `findings/upstream.yaml` (collected by create, evolve, and vali
 
 ## 1. Preflight
 
-The command wrapper runs `guide:preflight` with `upstream`. Then check `gh auth status`; when it fails, stop and ask the author to run `! gh auth login`. Get a run id with `uv run tools/guide/runs.py run-id --command upstream`.
+The `/guide:upstream` command runs `guide:preflight` with `upstream`. When its result is not already in this conversation (the skill was invoked directly, as it is on harnesses with no command layer), invoke `guide:preflight` with `upstream` and `--dir` now; stop when it stops. Then check `gh auth status`; when it fails, stop and ask the author to run `! gh auth login`. Get a run id with `uv run tools/guide/runs.py run-id --command upstream`.
 
 ## 2. Re-verify (FR-032)
 

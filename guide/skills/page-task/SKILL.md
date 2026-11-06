@@ -23,7 +23,7 @@ cc-guide does not reimplement subagent execution. The create and evolve skills r
 
 The controller (the session running `/guide:create` or `/guide:evolve`) does this once per run, after the author approved the plan:
 
-1. Resolve the plan workspace: `bash <superpowers>/skills/subagent-driven-development/scripts/sdd-workspace docs/guide/plan.md` (always `bash <script>`; `<superpowers>` is `installPath` from the preflight probe). It prints the workspace directory, `.superpowers/sdd/plan/` or a disambiguated variant.
+1. Resolve the plan workspace: `bash tools/guide/sdd/sdd-workspace docs/guide/plan.md` (always `bash <script>`; the vendored SDD helper travels with the guide project as `tools/guide/sdd/`, so the controller never reads another plugin's install directory, FR-006). It prints the workspace directory, `.superpowers/sdd/plan/` or a disambiguated variant.
 2. Copy into the workspace: `page-procedure.md`, `page-review-guide.md`, `final-review-addendum.md`, `style-rules.md`, `overview-contract.md`, and the rendered `global-constraints.md` (the same text as the plan's Global Constraints section). Copy the guide's `styleguide.md` there too.
 3. Let SDD create the ledger (`<workspace>/progress.md`, identity line naming `docs/guide/plan.md`), then record the pre-seeded rulings below as the first ruling lines, numbered `Ruling R1:` onwards, before the first dispatch.
 

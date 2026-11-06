@@ -3,5 +3,6 @@ build/
 dist/
 .guide/
 .superpowers/
+.opencode/
 .mcp.json
 .claude/settings.local.json

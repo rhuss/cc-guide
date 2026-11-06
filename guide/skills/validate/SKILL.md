@@ -13,7 +13,7 @@ Run every command from the guide project root; never `cd` into `.guide/cache/`.
 
 ## 1. Preflight and connection (FR-037)
 
-1. The command wrapper runs `guide:preflight` with `validate`; stop when it stops.
+1. The `/guide:validate` command runs `guide:preflight` with `validate`. When its result is not already in this conversation (the skill was invoked directly, as it is on harnesses with no command layer), invoke `guide:preflight` with `validate` and `--dir` now; stop when it stops.
 2. `--cluster NAME` is required. Read `clusters.<NAME>` from `guide.yaml`. When it is missing, stop and list the configured connection names, and how to add one:
 
    ```yaml

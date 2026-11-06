@@ -7,7 +7,7 @@ allowed-tools: ["Bash", "Read", "Write", "Edit", "Glob", "Grep", "Skill", "Agent
 
 # /guide:evolve
 
-Paths and conventions are those of the create skill (`PLUGIN`, `GUIDE`, `SP`, `WS`). Run every command from `GUIDE` or with `--root`; never `cd` into `.guide/cache/`.
+Paths and conventions are those of the create skill (`PLUGIN`, `GUIDE`, `WS`). `WS` is resolved with the vendored helper `bash tools/guide/sdd/sdd-workspace <plan>` (the evolve plan is `docs/guide/plans/<run-id>.md`); never read or run scripts from another plugin's install directory (FR-006). Run every command from `GUIDE` or with `--root`; never `cd` into `.guide/cache/`.
 
 ## Arguments
 
@@ -22,7 +22,7 @@ Paths and conventions are those of the create skill (`PLUGIN`, `GUIDE`, `SP`, `W
 
 ## 1. Preflight
 
-The command wrapper runs `guide:preflight` with `evolve` (and `--check` when given); superpowers is required only without `--check`. Stop when it stops.
+The `/guide:evolve` command runs `guide:preflight` first. When its result line is not already in this conversation (the skill was invoked directly, as it is on harnesses with no command layer), invoke `guide:preflight` with `evolve` (and `--check` when given, with `--dir`) now. Stop when it stops. superpowers is required only without `--check`.
 
 ## 2. Check-only mode (`--check`)
 

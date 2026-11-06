@@ -77,7 +77,7 @@ Bypassing permissions (`--dangerously-skip-permissions` or the bypass mode) remo
 
 | Component | Needed for | Install |
 |---|---|---|
-| superpowers 6.3.0 or later | create, evolve (not `evolve --check`) | `claude plugin install superpowers@claude-plugins-official` |
+| superpowers (validated against 7.0.0; an older version warns, never blocks) | create, evolve (not `evolve --check`) | `claude plugin install superpowers@claude-plugins-official` |
 | cc-prose | optional: voice profiles and AI-pattern checks | `claude plugin install prose@cc-rhuss-marketplace` |
 | Excalidraw MCP server (`yctimlin/mcp_excalidraw` 1.0.7) | diagrams only | Add the server to the guide project's `.mcp.json` (never commit that file) or your user configuration, start its canvas, and open the canvas URL in a browser before diagram tasks run; set `EXCALIDRAW_EXPORT_DIR` (see below) |
 
@@ -94,4 +94,4 @@ The Excalidraw MCP server reads and writes files only under its own working dire
 
 ### The superpowers dependency declaration
 
-`guide/.claude-plugin/plugin.json` declares `"dependencies": ["superpowers@claude-plugins-official"]` (research R2, verified when the plugin was built). `claude plugin validate` accepts it, and an install without superpowers reports the missing dependency with its install command. Side effect: without superpowers the whole plugin fails to load, so `preview`, `export`, `upstream`, `validate`, and `evolve --check` are unavailable too, although they do not use superpowers. The scheduled drift check is unaffected because it runs `tools/guide/drift.py` in CI without Claude Code. The runtime contract probe (`scripts/superpowers-probe.sh`) still runs for create and evolve, because the declaration does not check versions or the scripts cc-guide calls.
+`guide/.claude-plugin/plugin.json` declares `"dependencies": ["superpowers@claude-plugins-official"]` (research R2, verified when the plugin was built). `claude plugin validate` accepts it, and an install without superpowers reports the missing dependency with its install command. Side effect: without superpowers the whole plugin fails to load, so `preview`, `export`, `upstream`, `validate`, and `evolve --check` are unavailable too, although they do not use superpowers. The scheduled drift check is unaffected because it runs `tools/guide/drift.py` in CI without Claude Code. The advisory version check (`scripts/superpowers-probe.sh`) still runs for create and evolve: it compares superpowers' best-effort reported version against the known-good baseline in `compat.yaml` and warns (never blocks) when it is older. It no longer reads a registry or verifies the scripts cc-guide calls; presence is decided by capability exposure in the session.

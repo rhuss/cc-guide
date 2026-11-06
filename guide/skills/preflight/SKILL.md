@@ -1,19 +1,19 @@
 ---
 name: preflight
-description: Shared preflight for every /guide command. Resolves the guide project, checks the companion plugins (superpowers, cc-prose, Excalidraw MCP) and the adapter tool chain, and states the recommended session settings. Invoked by the guide command wrappers before their own skill; stops before any file is written when a requirement fails.
+description: Shared preflight for every /guide command. Resolves the guide project, detects the active harness and the companion capabilities (superpowers, cc-prose, Excalidraw MCP, parallel subagents) from in-session exposure, checks the adapter tool chain, and states the recommended session settings. Invoked by the guide command wrappers (and self-invoked by the skills on harnesses with no command layer) before the command's own skill; stops before any file is written when a requirement fails.
 argument-hint: "<command> [--dir PATH] [--check] [--format antora|mkdocs|gfm]"
 allowed-tools: ["Bash", "Read"]
 ---
 
 # Guide preflight
 
-Run this before any other step of a `/guide:*` command. It writes no files. When a check fails, stop the command with the message given here; never continue with a degraded flow (SC-009, FR-003, FR-004).
+Run this before any other step of a `/guide:*` command. It writes no files. When a check fails, stop the command with the message given here; never continue with a degraded flow (SC-009, FR-003, FR-004). Preflight runs on every supported harness (Claude Code, Codex, OpenCode); the only harness-specific step is the Claude-only settings/permission wiring in step 2 (FR-010, FR-018).
 
 ## Paths
 
 - `PLUGIN`: the plugin root, two directories above this skill's base directory (`<base>/../..`). Scripts live in `$PLUGIN/scripts/`, the toolkit in `$PLUGIN/toolkit/`, adapters in `$PLUGIN/adapters/`.
 - `GUIDE`: the guide project. Use `--dir PATH` when given, otherwise the current directory. Resolve it to an absolute path. Never `cd` into `.guide/cache/`.
-- `SESSION`: the directory this Claude Code session was started in (the primary working directory in your environment information), resolved to an absolute path. Claude Code reads the session's permissions from its `.claude/settings*.json` (at its git toplevel inside a repository) and from `~/.claude/settings.json`, not from the guide project's settings when the two differ.
+- `SESSION`: the directory this session was started in (the primary working directory in your environment information), resolved to an absolute path. On Claude Code the session's permissions are read from its `.claude/settings*.json` (at its git toplevel inside a repository) and from `~/.claude/settings.json`, not from the guide project's settings when the two differ. Other harnesses manage permissions differently and read no `.claude/settings*.json`.
 
 ## Steps
 
@@ -26,40 +26,55 @@ Run this before any other step of a `/guide:*` command. It writes no files. When
 - For `evolve --adopt`: `guide.yaml` may be missing; the adoption step writes it.
 - For `create`: the target rules are checked by the create skill (FR-005b); preflight only notes whether `guide.yaml` already exists (an existing guide project means create resumes, see the create skill).
 
-### 2. Companion plugins
+### 2. Harness and companion capabilities (FR-007, FR-010, FR-017)
 
-Run:
+Decide every dependency from **in-session capability exposure**: look at your own available skills and tools, not at any plugin registry or settings file (FR-007). Determine:
+
+- **harness**: `claude` when you are Claude Code (the Claude skills and the subagent `Agent`/`Task` tool are exposed); `codex` when you run under Codex; `opencode` when you run under OpenCode. Use your environment and your exposed tool set.
+- **superpowers**: `true` when the superpowers skills (for example `brainstorming`, `writing-plans`, `subagent-driven-development`, `requesting-code-review`) are among your available skills.
+- **superpowers_version**: best-effort. The version superpowers reports if your harness exposes it; otherwise omit it (it is only used for an advisory warning).
+- **multi_agent**: `true` when your harness exposes parallel subagent dispatch, the capability per-page writing and review depend on (the `Agent`/`Task` tool on Claude Code; the multi-agent spawn/wait tools on Codex when its multi-agent features are enabled).
+- **prose**: `true` when the `prose:humanizer` skill is available.
+- **excalidraw**: `true` when `mcp__excalidraw__*` tools are available.
+
+Pass what you observed to `deps.sh`, which assembles the record and computes the Claude-only Excalidraw settings wiring:
 
 ```bash
-bash "$PLUGIN/scripts/deps.sh" --dir "$GUIDE" --session-dir "$SESSION"
+bash "$PLUGIN/scripts/deps.sh" --harness <harness> \
+  --superpowers <true|false> [--superpowers-version <version>] \
+  --multi-agent <true|false> --prose <true|false> --excalidraw <true|false> \
+  --dir "$GUIDE" --session-dir "$SESSION"
 ```
 
-It prints JSON `{"superpowers": bool, "prose": bool, "excalidraw_allowed": bool, "excalidraw_allowed_in": [paths]}`. `excalidraw_allowed` is true when an `mcp__excalidraw` allow entry is in the guide project's settings, in the session directory's settings, or in `~/.claude/settings.json`; `excalidraw_allowed_in` lists the files that hold it.
+It prints JSON `{"harness", "superpowers", "superpowers_version", "multi_agent", "prose", "excalidraw", "excalidraw_allowed", "excalidraw_allowed_in"}`. `excalidraw_allowed`/`excalidraw_allowed_in` are meaningful only when `harness == "claude"`; on other harnesses they are `false`/`[]`.
 
-**superpowers** is required for `create` and for `evolve` without `--check`. For those, run the contract probe:
+**superpowers** is required for `create` and for `evolve` without `--check`. When `superpowers` is false for those, stop and write nothing (FR-011), naming the active harness:
+> `/guide:<command>` needs the superpowers plugin for this harness, and it is not available in this session. Install it for `<harness>` (Claude Code: `claude plugin install superpowers@claude-plugins-official`; Codex or OpenCode: install superpowers through that harness's plugin mechanism), restart the session, and run the command again. Nothing was written.
+
+When `superpowers` is true, check the version advisory (FR-016); never block on it:
 
 ```bash
-bash "$PLUGIN/scripts/superpowers-probe.sh"
+bash "$PLUGIN/scripts/superpowers-probe.sh" <superpowers_version>
 ```
 
 | Exit | Meaning | Action |
 |---|---|---|
-| 0 | Installed, contract intact, known-good version | Continue. |
-| 3 | Contract intact, version not in `$PLUGIN/compat.yaml` | Warn once: "superpowers `<version>` is not a known-good version (known: ...); the contract probe passed, continuing." Continue. |
-| 4 | Not installed, or a skill or script is missing or changed | Stop. Name every entry of `problems[]` from the JSON. |
+| 0 | Version at or above the known-good threshold, or no version reported | Continue. |
+| 3 | Version below the known-good threshold in `$PLUGIN/compat.yaml` | Warn once with the `problems[]` line, then continue. |
 
-Stop message when superpowers is missing:
-> `/guide:<command>` needs the superpowers plugin (6.3.0 or later). Install it with `claude plugin install superpowers@claude-plugins-official`, restart Claude Code, and run the command again. Nothing was written.
+**multi_agent** is required for `create` and for `evolve` without `--check` (per-page writing and review are dispatched to parallel subagents, FR-017). When `multi_agent` is false for those, stop and write nothing:
+> `/guide:<command>` needs your harness's parallel subagent dispatch, and it is not available in this session. On Codex, enable its multi-agent features (see the superpowers Codex notes) and restart; on Claude Code the subagent tool is always available. There is no single-agent fallback. Nothing was written.
 
-Stop message when the probe fails on a changed contract:
-> superpowers `<version>` changed in a way cc-guide does not support: `<problems>`. Known-good versions: `<compat.yaml known_good>`. Install a known-good version or update cc-guide. Nothing was written.
-
-**cc-prose** is optional (FR-003a). When `prose` is false, show exactly one line and continue:
-> Note: cc-prose is not installed, so pages use cc-guide's built-in style rules. Installing it (`claude plugin install prose@cc-rhuss-marketplace`) adds voice profiles and AI-pattern checks.
+**cc-prose** is optional (FR-003a, FR-008). When `prose` is false, show exactly one line and continue:
+> Note: cc-prose is not available in this session, so pages use cc-guide's built-in style rules. On Claude Code, installing it (`claude plugin install prose@cc-rhuss-marketplace`) adds voice profiles and AI-pattern checks.
 
 Record `prose: present|absent`; the create and evolve skills pass it to the page-task templates.
 
-**Excalidraw MCP** is needed only when a run plans diagram tasks. Record whether `mcp__excalidraw__*` tools are available in this session (look at your own tool list), and `excalidraw_allowed` and `excalidraw_allowed_in` from deps.sh. The entry covers this session only when `excalidraw_allowed_in` lists a settings file of the session directory (at its git toplevel inside a repository) or `~/.claude/settings.json`; when the session runs in another directory, an entry only in the guide project's files covers just the sessions started there. The create and evolve skills act on it once diagrams are planned (FR-003); preflight does not stop for it and writes no settings.
+**Excalidraw MCP** is needed only when a run plans diagram tasks (FR-003, FR-009). Record whether `mcp__excalidraw__*` tools are available in this session (your own tool list).
+- When `harness == "claude"`: also record `excalidraw_allowed` and `excalidraw_allowed_in` from deps.sh. The entry covers this session only when `excalidraw_allowed_in` lists a settings file of the session directory (at its git toplevel inside a repository) or `~/.claude/settings.json`; when the session runs in another directory, an entry only in the guide project's files covers just the sessions started there. The create and evolve skills act on it once diagrams are planned.
+- When `harness != "claude"`: there is no settings/permission wiring to do; report Excalidraw presence from exposure only (`excalidraw_allowed` is `false` and unused). When Excalidraw is absent, diagram tasks use the placeholder path (FR-009).
+
+Preflight never stops for Excalidraw and writes no settings.
 
 ### 3. Adapter tool chain
 
@@ -77,19 +92,21 @@ Record `prose: present|absent`; the create and evolve skills pass it to the page
 
 Print once:
 
-> Recommended session: the most capable model available (for example Opus 5.5) for this controlling session, subagents inherit it (no model override), effort `high` for create and evolve, `xhigh` with `--rigor strict`. See `$PLUGIN/docs/settings.md` for the permission allowlist.
+> Recommended session: the most capable model available for this controlling session, subagents inherit it (no model override), effort `high` for create and evolve, `xhigh` with `--rigor strict`. See `$PLUGIN/docs/settings.md` for the Claude Code permission allowlist.
 
 You can see your own model name in your system prompt; you cannot see the effort level. When your model is a Sonnet or Haiku class model, add one warning line and continue:
 
-> Warning: this session runs `<model>`. Source verification and reviews are more reliable with the most capable model; consider `/model` before continuing.
+> Warning: this session runs `<model>`. Source verification and reviews are more reliable with the most capable model; consider switching the model before continuing.
 
 ### 5. Result
 
 Report a compact block and hand it to the calling skill:
 
 ```text
-preflight: guide=<GUIDE> project=<exists|new> superpowers=<ok|unknown-version|not-needed> prose=<present|absent> excalidraw=<available|missing> excalidraw_allowed=<true|false> excalidraw_allowed_in=<paths|none> doctor=<ok|skipped|failed>
+preflight: guide=<GUIDE> project=<exists|new> harness=<claude|codex|opencode> superpowers=<ok|unknown-version|not-needed> superpowers_version=<version|none> multi_agent=<yes|no> prose=<present|absent> excalidraw=<available|missing> excalidraw_allowed=<true|false|n/a> excalidraw_allowed_in=<paths|none> doctor=<ok|skipped|failed>
 ```
+
+`excalidraw_allowed` is `n/a` on non-Claude harnesses.
 
 ## Rules
 

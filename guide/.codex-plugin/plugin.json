@@ -1,0 +1,11 @@
+{
+  "name": "guide",
+  "version": "0.4.0",
+  "description": "Create, evolve, preview, export, and validate source-verified guides from transcripts, notes, and pinned source repositories",
+  "author": {
+    "name": "Roland Huss",
+    "email": "rhuss@redhat.com"
+  },
+  "license": "MIT",
+  "skills": "./skills/"
+}

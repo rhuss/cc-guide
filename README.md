@@ -1,6 +1,6 @@
 # cc-guide
 
-A Claude Code plugin that writes guides you can trust and keeps them current.
+A plugin for Claude Code (primary), Codex, and OpenCode that writes guides you can trust and keeps them current, from one plugin directory.
 
 You point it at the material you have: source repositories, walkthrough transcripts, tickets, links, and notes. It interviews you about audience and personas, plans the guide with you, and then writes it page by page. A fresh reviewer checks every page against the sources, pinned to exact commits, before the next page starts. When the sources move on, the plugin shows which pages cite changed files and updates only those.
 
@@ -29,19 +29,42 @@ All three share one contract: the same `make` targets (`doctor`, `fetch-baseline
 
 ## Install
 
+cc-guide runs on Claude Code (primary), Codex, and OpenCode from one plugin directory. Each harness reads only its own entry point and resolves the same shared skills, so the command set and behavior are the same across harnesses except for the documented degradations below.
+
+### Claude Code
+
 ```bash
 # from a checkout of this repository
 make install
 ```
 
-Requirements:
+### Codex
 
-- Claude Code with the [superpowers](https://github.com/obra/superpowers) plugin, version 6.3.0 or later (`claude plugin install superpowers@claude-plugins-official`). create and evolve run the superpowers brainstorming, planning, and subagent execution flow.
-- `uv`, `git`, Node 20 or later, and Playwright Chromium (`npx playwright install chromium`). Pandoc 3 for the `gfm` format. `gh` (authenticated) for change requests and upstream reports.
-- Optional: [cc-prose](https://github.com/rhuss/cc-prose) for voice profiles and AI-pattern checks; without it the plugin uses built-in style rules.
-- Optional: the Excalidraw MCP server (`yctimlin/mcp_excalidraw`) for diagrams.
+Register this checkout as a local plugin and install it through Codex's own plugin mechanism. Codex reads `guide/.codex-plugin/plugin.json` and discovers the guide skills directly; there is no command layer, and the skills run `guide:preflight` themselves. create and evolve need Codex's multi-agent features enabled (`multi_agent = true` in `~/.codex/config.toml`), because per-page writing and review are dispatched to parallel subagents; preflight stops with a prerequisite message when that capability is not available.
 
-Recommended session settings and a permission allowlist are in [`guide/docs/settings.md`](guide/docs/settings.md).
+### OpenCode
+
+Install the command shims into a project with the bundled installer:
+
+```bash
+bash guide/opencode/install.sh --project-dir <project>
+```
+
+It copies the six guide commands into `<project>/.opencode/plugins/guide/command/`; each one chains `guide:preflight` and the matching guide skill, so OpenCode runs the same shared logic as the other harnesses with no behavior fork. OpenCode is delivered best-effort on the shared adapter (install, command discovery, and launch); the multi-agent prerequisite and the degradations below apply the same way as on Codex.
+
+### Requirements (every harness)
+
+- [superpowers](https://github.com/obra/superpowers) installed for the active harness (required for create and evolve; detected by capability exposure in the session). On Claude Code: `claude plugin install superpowers@claude-plugins-official`. cc-guide was validated against superpowers 7.0.0; an older version runs with an advisory warning, never a block.
+- `uv`, `git`, Node 20 or later, and Playwright Chromium (`npx playwright install chromium`). Pandoc 3 for the `gfm` format. `gh` (authenticated) for change requests and upstream reports. `jq` or `python3` for the capability-detection scripts (`scripts/deps.sh`, `scripts/superpowers-probe.sh`): jq is preferred, python3 is the fallback, and at least one must be on `PATH`.
+
+### Known degradations on non-Claude harnesses
+
+Two optional capabilities are Claude Code only for now and fall back automatically; the authoring and verification flow is otherwise equivalent to Claude Code:
+
+- Prose polish: without [cc-prose](https://github.com/rhuss/cc-prose) (voice profiles and the AI-pattern gate), pages are written with cc-guide's built-in style rules. cc-prose is Claude Code only today, so this is the default on Codex until its separate multi-harness port lands.
+- Diagrams: without the Excalidraw MCP server (`yctimlin/mcp_excalidraw`), diagram tasks fall back to placeholder images that name the missing diagrams, and the run continues.
+
+Recommended session settings and the Claude Code permission allowlist are in [`guide/docs/settings.md`](guide/docs/settings.md).
 
 ## Quick start
 
@@ -89,7 +112,7 @@ The toolkit lives in the guide project so the scheduled drift check (`.github/wo
 ```bash
 make validate        # claude plugin validate on the marketplace and the plugin
 make test            # toolkit tests (pytest through uv)
-make test-adapters   # adapter smoke tests for antora, mkdocs, and gfm
+make test-adapters   # per-format smoke tests (antora, mkdocs, gfm) plus the additive per-harness checks (Claude Code, Codex, OpenCode)
 make eval            # how to run the behavioral evals (agent-eval-harness)
 ```
 

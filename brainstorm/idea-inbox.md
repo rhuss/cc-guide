@@ -91,3 +91,30 @@ Ideas captured from code reviews for future brainstorming.
 - **Summary**: Generated pages narrated the guide's own creation in rendered prose: claim-ledger references ("every claim traces to a source recorded in the claim ledger"), pinned commit hashes ("the plugin is described at commit X"), and an "internal knowledge" marking convention repeated on dozens of facts.
 
 > The strict-rigor machinery (claim ledger, pinned sources, registered inputs) is maintainer-facing and already lives in non-rendering `//` source comments and the ledger page, but nothing stops it from leaking into reader-facing prose. A reader cares what the guide states and how much to trust it, not how the guide was verified. Worth adding to the toolkit: page-task brief guidance that provenance belongs in `//` comments only, plus a check (guide-rules forbid patterns such as "claim ledger", "internal knowledge", or commit-short attributes outside the Baseline note) so the leak fails `make check`. Uncertainty should surface as a reader-relevant hedge ("unconfirmed", "reported by the team") rather than a provenance label. The Baseline note stays as the single standardized statement of covered versions. Fixed by hand in the cc-rosa guide (16 files); the idea is to make the toolkit prevent it.
+
+### vendored-sdd-task-brief-path-input
+
+- **Source**: deep-review
+- **Date**: 2026-11-06
+- **Reference**: 004-multi-harness-support
+- **Summary**: The vendored `tools/guide/sdd/task-brief` interpolates the caller-supplied TASK_NUMBER into its default output path with no numeric validation, so a value like `../../x` would create or truncate a file outside the plan workspace.
+
+> The task number comes from the trusted controller, not an external boundary, and the script is vendored verbatim from superpowers 7.0.0, so patching it in place would break the verbatim-copy contract (FR-006). Right home is either an upstream fix in superpowers that the vendored copy then inherits, or a one-line numeric guard recorded as a deviation in the vendoring note. `review-package` already validates its refs with `git rev-parse`, so the asymmetry is only in `task-brief`.
+
+### claude-hard-dependency-vs-superpowers-absent-edge-case
+
+- **Source**: deep-review
+- **Date**: 2026-11-06
+- **Reference**: 004-multi-harness-support
+- **Summary**: The Claude manifest hard-declares `dependencies: [superpowers]`, so on Claude Code the whole plugin fails to load without superpowers, making preview, export, upstream, validate, and `evolve --check` unavailable too, which tensions with spec.md:70 ("preview, export, and validate still run" when superpowers is missing).
+
+> On Codex and OpenCode there is no manifest-level hard dependency, so those superpowers-independent commands do run without superpowers, meaning the superpowers-absent behavior now differs by harness. The Claude behavior is pre-existing and protected by FR-012 (no regression), so it was left as is. If cross-harness parity with the spec edge case is wanted later, the Claude dependency would need to become soft (capability-exposure gating, as on the other harnesses), at the cost of losing the clean install-time missing-dependency message.
+
+### opencode-skill-resolution-vs-core-shims
+
+- **Source**: deep-review
+- **Date**: 2026-11-06
+- **Reference**: 004-multi-harness-support
+- **Summary**: cc-guide's OpenCode command shims invoke `guide:preflight` / `guide:<name>` skills by name, but `install.sh` only copies the shim files into `.opencode/plugins/guide/command/`; the cc-review reference instead resolves a `core/` directory and executes its files directly, never relying on skill-by-name resolution.
+
+> Whether OpenCode resolves cc-guide's skills from copied command files is unverified (OpenCode is the secondary, best-effort harness, and live verification is the open item in tests/manual/004-multi-harness.md). The discovery path itself (`.opencode/plugins/guide/command/` vs `.opencode/command/`) is also unconfirmed. If live OpenCode testing shows the skills do not resolve, the fix is to either register the plugin's skills with OpenCode in install.sh, or restructure the shims to resolve and run the skill bodies directly (a core-dir-style resolution like cc-review) rather than by name. Codex (primary) is unaffected: it discovers skills via the `.codex-plugin` manifest.

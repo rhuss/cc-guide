@@ -208,12 +208,14 @@ The page reviewer of every page that shows the diagram checks the claims again, 
 
 ## 10. Permissions
 
+This settings and permission wiring is Claude Code only (FR-010). When the active harness is not Claude Code, skip this section: there is no `.claude/settings*.json` to wire, and when the Excalidraw tools are unavailable the run uses the placeholder path in section 11 (FR-009).
+
 Permission prompts stalled one diagram task for about three hours, and an allow entry in the wrong file let the permission classifier deny `clear_canvas` and `import_scene` to a drawing subagent. The allow entry `mcp__excalidraw` (or `mcp__excalidraw__*`) must be in the settings Claude Code reads for the controlling session, which its subagents share:
 
 - `.claude/settings.local.json` (or `.claude/settings.json`) of the directory the session runs in (its git toplevel inside a repository), or
 - `~/.claude/settings.json`.
 
-The guide project's own `.claude/settings*.json` only apply to sessions started in the guide project. Before the first diagram task, run `bash "$PLUGIN/scripts/deps.sh" --dir <guide> --session-dir <session directory>` (`PLUGIN` is the plugin root, two directories above this skill's base directory; the session directory is the one the session was started in). It reports `excalidraw_allowed` and, in `excalidraw_allowed_in`, the files that hold the entry. When the entry is missing, or it is only in the guide project's files while the session runs elsewhere, offer to add it to `<session directory>/.claude/settings.local.json` (and, as an option for future sessions started there, to the guide project's), and add it only after the author agrees:
+The guide project's own `.claude/settings*.json` only apply to sessions started in the guide project. Before the first diagram task, run `bash "$PLUGIN/scripts/deps.sh" --harness claude --dir <guide> --session-dir <session directory>` (`PLUGIN` is the plugin root, two directories above this skill's base directory; the session directory is the one the session was started in). It reports `excalidraw_allowed` and, in `excalidraw_allowed_in`, the files that hold the entry. When the entry is missing, or it is only in the guide project's files while the session runs elsewhere, offer to add it to `<session directory>/.claude/settings.local.json` (and, as an option for future sessions started there, to the guide project's), and add it only after the author agrees:
 
 ```json
 { "permissions": { "allow": ["mcp__excalidraw"] } }

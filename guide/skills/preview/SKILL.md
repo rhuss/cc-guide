@@ -11,7 +11,7 @@ Shows the rendered guide in a browser within a minute and keeps it current while
 
 ## Steps
 
-1. The command wrapper runs `guide:preflight` with `preview` (it needs a guide project and a passing `make doctor`); stop when it stops.
+1. The `/guide:preview` command runs `guide:preflight` with `preview`. When its result is not already in this conversation (the skill was invoked directly, as it is on harnesses with no command layer), invoke `guide:preflight` with `preview` and `--dir` now (it needs a guide project and a passing `make doctor`); stop when it stops.
 2. View: `--internal` selects the internal view (`VIEW=internal`). When `guide.yaml` has `internal.enabled: false`, say there is no internal part and serve the shareable view.
 3. Port: `--port N`, otherwise the adapter's `preview_port` from `tools/guide/adapter.yaml` (8000 by default). When the port is taken (`lsof -iTCP:<port> -sTCP:LISTEN`), pick the next free one and say so.
 4. Start the server in the background from the guide project root:

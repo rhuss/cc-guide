@@ -11,7 +11,7 @@ One PDF of the guide, built from the same content as the site (FR-030a to FR-030
 
 ## Steps
 
-1. The command wrapper runs `guide:preflight` with `export`; it stops when `make doctor` fails (the PDF printer needs Playwright Chromium; the gfm adapter also needs Pandoc). Stop with doctor's hint.
+1. The `/guide:export` command runs `guide:preflight` with `export`. When its result is not already in this conversation (the skill was invoked directly, as it is on harnesses with no command layer), invoke `guide:preflight` with `export` and `--dir` now; it stops when `make doctor` fails (the PDF printer needs Playwright Chromium; the gfm adapter also needs Pandoc). Stop with doctor's hint.
 2. View:
    - Default: the shareable view.
    - `--internal`: only when `guide.yaml` has `internal.enabled: true`. Warn first and ask for confirmation:
