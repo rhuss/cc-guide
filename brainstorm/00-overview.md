@@ -1,6 +1,6 @@
 # Brainstorm Overview
 
-Last updated: 2026-11-06
+Last updated: 2026-11-07
 
 ## Sessions
 
@@ -10,6 +10,7 @@ Last updated: 2026-11-06
 | 02 | 2026-10-07 | antora-branding | active | - | - |
 | 03 | 2026-10-15 | strict-claim-ledger | parked | - | - |
 | 04 | 2026-11-06 | multi-harness-support | active | - | - |
+| 05 | 2026-11-07 | embedded-guide | active | - | - |
 
 ## Open Threads
 - How does cc-guide detect superpowers version drift (renamed skills or scripts), and what is the fallback? (from #01)
@@ -25,7 +26,6 @@ Last updated: 2026-11-06
 - Default `logo_alt` when omitted (from #02)
 - How docs state that the `logo_text` template is meant for Red Hat-owned guides (from #02)
 - Which bundle CSS properties the accent `color` overrides, and whether it reaches the PDF title page (from #02)
-
 - Who creates and fills the claim ledger under strict rigor (from #03)
 - OpenCode command parity: minimal shim to keep `/guide:*` working without duplicating skill logic (from #04)
 - superpowers detection without a Claude plugin registry, and the per-harness "install superpowers" message (from #04)
@@ -34,5 +34,15 @@ Last updated: 2026-11-06
 - Per-harness adapter smoke test dimension alongside `make test-adapters` (from #04)
 - `AGENTS.md` content for cc-guide and whether the scaffold `.gitignore` needs Codex/OpenCode workspace entries (from #04)
 - OpenCode depth in v1, given it is the secondary harness (from #04)
+- Name of the guide.yaml front-page setting and the default subdirectory (from #05)
+- Fetch the `self` source from the local repository or the remote (from #05)
+- Stub file format, and whether stubs expire (from #05)
+- Developer README name and location (from #05)
+- CI drift check: fail the pull request or comment only (from #05)
+- How a pull request updating code and guide together moves the `self` pin forward (from #05)
+- How create detects an existing repository and switches to embedded mode (from #05)
+- Link handling between the root README and `guide/` (from #05)
 
 ## Parked Ideas
+- Strict rigor without a claim ledger (#03)
+  Reason: not decided; approach A proposed, to be implemented on its own branch
