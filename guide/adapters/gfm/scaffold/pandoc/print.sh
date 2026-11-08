@@ -1,17 +1,21 @@
 #!/usr/bin/env bash
 # Assemble the print HTML of a GitHub Markdown guide (gfm adapter, cc-guide).
-#   usage: pandoc/print.sh shareable|internal <out.html>
+#   usage: pandoc/print.sh shareable|internal <out.html> [<docs dir>]
+# The docs directory defaults to docs; an embedded guide prints from build/stage/docs
+# (tools/guide/embed.py stage), where the front page replaces the pointer page.
 # Pages come in the order of docs/SUMMARY.md (its ## headings are the navigation
 # sections); the internal view adds the pages listed in internal/README.md. Each page
 # is converted with pandoc and pandoc/print.lua and starts with its h1; make pdf hands
 # the result to tools/guide/print-pdf.mjs. Run it from the guide project root.
 set -euo pipefail
-[[ $# -eq 2 && ( $1 == shareable || $1 == internal ) ]] || { echo "usage: print.sh shareable|internal <out.html>" >&2; exit 2; }
+[[ ( $# -eq 2 || $# -eq 3 ) && ( $1 == shareable || $1 == internal ) ]] || { echo "usage: print.sh shareable|internal <out.html> [<docs dir>]" >&2; exit 2; }
 view=$1
 out=$2
+docs=${3:-docs}
+docs=${docs%/}
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(pwd -P)
-[[ -f docs/SUMMARY.md ]] || { echo "docs/SUMMARY.md not found (run from the guide project root)" >&2; exit 1; }
+[[ -f $docs/SUMMARY.md ]] || { echo "$docs/SUMMARY.md not found (run from the guide project root)" >&2; exit 1; }
 
 esc() { sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'; }
 
@@ -28,7 +32,7 @@ mkdir -p "$(dirname "$out")"
 body=$(mktemp "${TMPDIR:-/tmp}/guide-print.XXXXXX")
 trap 'rm -f "$body" "$body.nav"' EXIT
 {
-  nav docs/SUMMARY.md docs
+  nav "$docs/SUMMARY.md" "$docs"
   if [[ $view == internal ]]; then nav internal/README.md internal; fi
 } > "$body.nav"
 
@@ -46,13 +50,13 @@ while IFS='|' read -r kind value; do
   fi
   echo '<article class="guide-source-page">' >> "$body"
   pandoc --from gfm --to html5 --lua-filter "$here/print.lua" \
-    --metadata guide_root="$root" --metadata page_path="$value" "$value" >> "$body"
+    --metadata guide_root="$root" --metadata page_path="$value" --metadata docs_dir="$docs" "$value" >> "$body"
   echo '</article>' >> "$body"
   count=$((count + 1))
 done < "$body.nav"
 rm -f "$body.nav"
 [[ $open -eq 1 ]] && echo '</section>' >> "$body"
-[[ $count -gt 0 ]] || { echo "print.sh: no pages listed in docs/SUMMARY.md" >&2; exit 1; }
+[[ $count -gt 0 ]] || { echo "print.sh: no pages listed in $docs/SUMMARY.md" >&2; exit 1; }
 
 title=$(sed -n 's/^title: *//p' guide.yaml | head -1 | sed -e 's/^"//' -e 's/"$//' | esc)
 tmp="$out.tmp"

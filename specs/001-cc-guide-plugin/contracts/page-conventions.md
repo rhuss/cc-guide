@@ -29,6 +29,8 @@ Rules:
 - `input-id` must exist in `inputs.yaml`. An `input:` reference is allowed only on internal pages: content whose only support is an input (above all a confidential one) never reaches the shareable part.
 - A page without a block fails the content check. An empty block is allowed only for pages marked `:guide-no-sources:` (antora attribute) or `<!-- guide: no-sources -->` (Markdown), for example a pure navigation page.
 - The block is parsed only at the top of the page, never inside listings (fixes the saw-guide checker defect that matched `// Sources:` anywhere).
+- Embedded guides (specs/005-embedded-guide): `self` is the reserved source id of the host repository. A `self:` reference must not name a file inside the guide subdirectory, the front page, the developer README, or a stub (FR-012); the guide never verifies itself against its own text. A `self` path without a fingerprint in `baseline.yaml` is a warning until the next rebaseline.
+- The front page of an embedded guide (the host README) starts with the ownership comment `<!-- guide: front page. This file is generated and maintained by cc-guide; change it with /guide:evolve. -->`, then the `#` title and any badges or logo, then the source block.
 
 ## 2. Task steps and checks
 
@@ -102,3 +104,7 @@ Exactly five admonition types with fixed meanings, mapped by each adapter:
 - AsciiDoc only: one sentence per line (semantic line breaks).
 - Versions and commits appear only through baseline attributes or placeholders, never typed.
 - Shareable pages contain no links into the internal part and none of the confidential terms or patterns from `guide.yaml`.
+
+## Front page links (embedded guides)
+
+An embedded guide's front page links into the guide with host-relative paths (`guide/docs/admin/install.md`), or with absolute `<web>/blob/<ref>/...` URLs when the README is published to a package registry. Guide pages link back to it relatively (`../../../README.md` from `guide/docs/admin/x.md`). The checks resolve every link from where the file lives, so links work when GitHub renders the repository; the build stages the front page into `docs/` and rewrites these links for the site and the PDF (specs/005-embedded-guide FR-010). Stubs at removed documentation paths start with `<!-- guide: moved -->` and hold exactly one link, which must resolve.

@@ -16,6 +16,7 @@ An adapter turns the format-neutral guide model into one output format. Each liv
 | Preview | `tools/guide/preview-watch.mjs` (debounce, queue, last good site, reload) | the same watcher with `mkdocs build --strict` | `markserv` (no build, so nothing can break) |
 | Print HTML for the PDF | html-single export `build/site/guide/_exports/index.html` | print-site page `build/site/print_page.html` | Pandoc assembly in `docs/SUMMARY.md` order |
 | Linked git worktrees | generated playbooks (`tools/guide/playbook.py`) | works as is | works as is |
+| Embedded in the documented repository | no | no | yes: the host README is the front page ([embedded.md](embedded.md)) |
 | Branding (`guide.yaml` `branding`) | all eight keys: `logo_text`, `wordmark`, `logo`, `logo_alt`, `footer`, `favicon`, `color`, `theme`, plus the overlay directory `ui/supplemental/` ([branding.md](branding.md)) | none (a branding block fails validation) | none (a branding block fails validation) |
 
 ## Make targets

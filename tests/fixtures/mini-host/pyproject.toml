@@ -1,0 +1,6 @@
+[project]
+name = "mini-host"
+version = "0.1.0"
+description = "A tiny greeting tool (cc-guide test fixture)"
+readme = "README.md"
+requires-python = ">=3.11"

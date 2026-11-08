@@ -1,4 +1,5 @@
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -324,3 +325,319 @@ def test_validate_neutral_branding_with_pyyaml_only(render_fixture_guide):
     proc = run_uv_validate(root)
     assert proc.returncode == 1
     assert "guide.yaml:branding.theme: must be neutral or stock (got dark)" in proc.stdout
+
+
+# --- embedded mode (specs/005-embedded-guide) --------------------------------
+
+from conftest import FRONT_PAGE, commit_all, host_git, make_embedded_guide  # noqa: E402
+
+SHA_A = "a" * 40
+
+
+@pytest.fixture
+def embedded(mini_host):
+    host, commit = mini_host
+    return make_embedded_guide(host, commit, front_page=FRONT_PAGE)
+
+
+def set_embedded(root: Path, **values) -> None:
+    edit(root / "guide.yaml", lambda d: d["embedded"].update(values))
+
+
+def config_error(loader, root) -> str:
+    with pytest.raises(ConfigError) as err:
+        loader(root)
+    return str(err.value)
+
+
+def test_mini_host_fixture_is_deterministic(tmp_path):
+    from conftest import build_mini_host
+    _, one = build_mini_host(tmp_path / "a")
+    _, two = build_mini_host(tmp_path / "b")
+    assert one == two and len(one) == 40
+
+
+def test_embedded_block_loads(embedded):
+    guide = guidecfg.load_guide(embedded)
+    emb = guide.embedded
+    assert emb is not None
+    assert emb.front_page.resolve() == (embedded.parent / "README.md").resolve()
+    assert emb.developer_readme is None and emb.stubs == [] and emb.pr_check is False
+    set_embedded(embedded, developer_readme="../DEVELOPMENT.md", stubs=["../docs/install.md"], pr_check="on")
+    emb = guidecfg.load_guide(embedded).embedded
+    assert emb.developer_readme.resolve() == (embedded.parent / "DEVELOPMENT.md").resolve()
+    assert [p.resolve() for p in emb.stubs] == [(embedded.parent / "docs/install.md").resolve()]
+    assert emb.pr_check is True
+
+
+def test_standalone_guide_has_no_embedded(render_fixture_guide):
+    assert guidecfg.load_guide(render_fixture_guide).embedded is None
+
+
+def test_unquoted_off_pr_check(embedded):
+    path = embedded / "guide.yaml"
+    path.write_text(path.read_text().replace("embedded:\n", "embedded:\n  pr_check: off\n"))
+    assert guidecfg.load_guide(embedded).embedded.pr_check is False
+
+
+def test_embedded_unknown_key_fails(embedded):
+    set_embedded(embedded, colour="blue")
+    assert "embedded.colour" in config_error(guidecfg.load_guide, embedded)
+
+
+@pytest.mark.parametrize("change, key", [
+    (lambda d: d.update(format="mkdocs"), "format"),
+    (lambda d: d["internal"].update(enabled=True), "internal.enabled"),
+    (lambda d: d["internal"].update(confidential_terms=["ACME"]), "internal.confidential_terms"),
+    (lambda d: d["internal"].update(confidential_patterns=["X-\\d+"]), "internal.confidential_patterns"),
+])
+def test_embedded_requires_gfm_without_internal_part(embedded, change, key):
+    edit(embedded / "guide.yaml", change)
+    assert key in config_error(guidecfg.load_guide, embedded)
+
+
+@pytest.mark.parametrize("front", ["docs/front.md", "../../outside.md", "../README.txt"])
+def test_front_page_location_rules(embedded, front):
+    set_embedded(embedded, front_page=front)
+    assert "embedded.front_page" in config_error(guidecfg.load_guide, embedded)
+
+
+@pytest.mark.parametrize("key, value", [
+    ("developer_readme", "DEVELOPMENT.md"),        # inside the guide root
+    ("developer_readme", "../../DEVELOPMENT.md"),  # outside the host
+    ("stubs", ["docs/old.md"]),
+    ("stubs", ["../../old.md"]),
+])
+def test_developer_readme_and_stubs_location_rules(embedded, key, value):
+    set_embedded(embedded, **{key: value})
+    assert f"embedded.{key}" in config_error(guidecfg.load_guide, embedded)
+
+
+def test_missing_front_page_fails_validate_unless_allowed(embedded):
+    (embedded.parent / "README.md").unlink()
+    guidecfg.load_guide(embedded)   # the schema load does not check existence
+    problems, _ = guidecfg.validate(embedded)
+    assert any("embedded.front_page" in p and "not found" in p for p in problems), problems
+    assert guidecfg.validate(embedded, allow_missing_front_page=True) == ([], [])
+    proc = run_cli(embedded, "validate", "--allow-missing-front-page")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert run_cli(embedded, "validate").returncode == 1
+
+
+def test_cli_get_embedded_keys(embedded, render_fixture_guide):
+    proc = run_cli(embedded, "get", "embedded.front_page")
+    assert proc.returncode == 0 and proc.stdout.strip() == "../README.md"
+    proc = run_cli(render_fixture_guide, "get", "embedded.front_page")
+    assert proc.returncode == 0 and proc.stdout.strip() == ""
+    set_embedded(embedded, developer_readme="../DEVELOPMENT.md", pr_check="on")
+    assert run_cli(embedded, "get", "embedded.developer_readme").stdout.strip() == "../DEVELOPMENT.md"
+    assert run_cli(embedded, "get", "embedded.pr_check").stdout.strip() == "on"
+
+
+# --- discover (FR-031) ----------------------------------------------------------
+
+
+def discover(path: Path) -> subprocess.CompletedProcess:
+    return subprocess.run([sys.executable, str(TOOLKIT / "guidecfg.py"), "discover", "--dir", str(path)],
+                          capture_output=True, text=True)
+
+
+def test_discover_current_dir(embedded, render_fixture_guide):
+    for root in (embedded, render_fixture_guide):
+        proc = discover(root)
+        assert proc.returncode == 0, proc.stderr
+        assert Path(proc.stdout.strip()).resolve() == root.resolve()
+
+
+def test_discover_one_embedded_subdirectory(embedded):
+    proc = discover(embedded.parent)
+    assert proc.returncode == 0, proc.stderr
+    assert Path(proc.stdout.strip()).resolve() == embedded.resolve()
+    assert guidecfg.discover(embedded.parent).resolve() == embedded.resolve()
+
+
+def test_discover_several_exits_3(embedded):
+    shutil.copytree(embedded, embedded.parent / "guide2")
+    proc = discover(embedded.parent)
+    assert proc.returncode == 3
+    out = proc.stdout + proc.stderr
+    assert "guide2" in out and str(embedded.name) in out
+
+
+def test_discover_none_exits_4(tmp_path, embedded):
+    assert discover(tmp_path / "nothing-here").returncode == 4
+    (tmp_path / "empty").mkdir()
+    assert discover(tmp_path / "empty").returncode == 4
+    # a subdirectory with a non-embedded guide.yaml is not an embedded guide
+    edit(embedded / "guide.yaml", lambda d: d.pop("embedded"))
+    assert discover(embedded.parent).returncode == 4
+
+
+# --- confidential.local.yaml (FR-006, research R9) ------------------------------------
+
+
+def write_local(root: Path, data: dict) -> None:
+    (root / "confidential.local.yaml").write_text(yaml.safe_dump(data, sort_keys=False))
+
+
+def test_local_confidential_terms_merge(embedded):
+    assert guidecfg.load_guide(embedded).confidential_terms == []
+    write_local(embedded, {"confidential_terms": ["ACME Corp"], "confidential_patterns": ["\\bACME-\\d+\\b"]})
+    guide = guidecfg.load_guide(embedded)
+    assert guide.confidential_terms == ["ACME Corp"]
+    assert guide.confidential_patterns == ["\\bACME-\\d+\\b"]
+
+
+def test_local_confidential_bad_regex_names_file(embedded):
+    write_local(embedded, {"confidential_patterns": ["[unclosed"]})
+    message = config_error(guidecfg.load_guide, embedded)
+    assert "confidential.local.yaml" in message and "invalid regex" in message
+
+
+def test_local_input_location_resolves(embedded, tmp_path):
+    notes = tmp_path / "secret-notes.txt"
+    notes.write_text("notes\n")
+    write_local(embedded, {"inputs": {"call-1": str(notes)}})
+    (embedded / "inputs.yaml").write_text(yaml.safe_dump({"inputs": [
+        {"id": "call-1", "kind": "notes", "location": "local:call-1", "confidential": True}]}))
+    item = guidecfg.load_inputs(embedded).get("call-1")
+    assert item.path(embedded) == notes
+    write_local(embedded, {"inputs": {}})
+    message = config_error(guidecfg.load_inputs, embedded)
+    assert "local:call-1" in message and "confidential.local.yaml" in message
+    # without the git-ignored file (a fresh clone, CI) the input loads unresolved
+    (embedded / "confidential.local.yaml").unlink()
+    item = guidecfg.load_inputs(embedded).get("call-1")
+    assert item.resolved == "" and item.path(embedded) is None
+
+
+# --- baseline `self` and inputs `self:` (data-model.md) --------------------------------
+
+
+def test_self_source_with_fingerprints_loads(embedded):
+    edit(embedded / "baseline.yaml", lambda d: d["sources"][0].update(
+        web="https://github.com/acme/mini-host", front_page_blob=SHA_A,
+        fingerprints={"src/cli.py": "b" * 40}))
+    src = guidecfg.load_baseline(embedded).source("self")
+    assert src.web == "https://github.com/acme/mini-host"
+    assert src.fingerprints == {"src/cli.py": "b" * 40}
+    assert src.front_page_blob == SHA_A
+
+
+def test_self_source_only_in_embedded_guides(embedded):
+    edit(embedded / "guide.yaml", lambda d: d.pop("embedded"))
+    assert "self" in config_error(guidecfg.load_baseline, embedded)
+
+
+def test_self_source_at_most_once(embedded):
+    edit(embedded / "baseline.yaml", lambda d: d["sources"].append(dict(d["sources"][0])))
+    assert "self" in config_error(guidecfg.load_baseline, embedded)
+
+
+@pytest.mark.parametrize("values, key", [
+    ({"fingerprints": {"src/cli.py": "abc"}}, "fingerprints"),
+    ({"front_page_blob": "xyz"}, "front_page_blob"),
+])
+def test_self_fingerprint_values(embedded, values, key):
+    edit(embedded / "baseline.yaml", lambda d: d["sources"][0].update(values))
+    assert key in config_error(guidecfg.load_baseline, embedded)
+
+
+def test_fingerprints_only_on_self(embedded, fixture_repo):
+    repo, first, _, _ = fixture_repo
+    edit(embedded / "baseline.yaml", lambda d: d["sources"].append(
+        {"id": "mini", "repo": repo.as_uri(), "commit": first, "fingerprints": {"x": "b" * 40}}))
+    assert "fingerprints" in config_error(guidecfg.load_baseline, embedded)
+
+
+def test_self_input_requires_revision_and_blob(embedded):
+    entry = {"id": "host-readme", "kind": "document", "location": "self:README.md",
+             "revision": SHA_A, "blob": "b" * 40}
+    (embedded / "inputs.yaml").write_text(yaml.safe_dump({"inputs": [entry]}))
+    item = guidecfg.load_inputs(embedded).get("host-readme")
+    assert item.revision == SHA_A and item.blob == "b" * 40
+    assert item.path(embedded) is None
+    for missing in ("revision", "blob"):
+        bad = {k: v for k, v in entry.items() if k != missing}
+        (embedded / "inputs.yaml").write_text(yaml.safe_dump({"inputs": [bad]}))
+        assert missing in config_error(guidecfg.load_inputs, embedded)
+
+
+def test_self_input_path_inside_guide_is_not_refused(embedded):
+    entry = {"id": "pointer", "kind": "document", "location": "self:guide/docs/README.md",
+             "revision": SHA_A, "blob": "b" * 40}
+    (embedded / "inputs.yaml").write_text(yaml.safe_dump({"inputs": [entry]}))
+    assert guidecfg.load_inputs(embedded).get("pointer") is not None
+
+
+def test_local_input_only_in_embedded_guides(embedded, tmp_path):
+    write_local(embedded, {"inputs": {"call-1": str(tmp_path / "n.txt")}})
+    (embedded / "inputs.yaml").write_text(yaml.safe_dump({"inputs": [
+        {"id": "call-1", "kind": "notes", "location": "local:call-1"}]}))
+    guidecfg.load_inputs(embedded)
+    edit(embedded / "guide.yaml", lambda d: d.pop("embedded"))
+    assert "local:" in config_error(guidecfg.load_inputs, embedded)
+
+
+
+def test_confidential_input_of_embedded_guide_must_be_local(embedded, tmp_path):
+    # FR-006: inputs.yaml is committed, so a confidential input never names its location there
+    (embedded / "inputs.yaml").write_text(yaml.safe_dump({"inputs": [
+        {"id": "call-1", "kind": "notes", "location": str(tmp_path / "acme-call.txt"), "confidential": True}]}))
+    message = config_error(guidecfg.load_inputs, embedded)
+    assert "local:<id>" in message and "confidential.local.yaml" in message
+    edit(embedded / "guide.yaml", lambda d: d.pop("embedded"))
+    guidecfg.load_inputs(embedded)   # a separate guide keeps confidential locations as today
+
+
+# --- pages() with the front page --------------------------------------------------
+
+
+def test_pages_include_front_page_only_when_embedded(embedded):
+    adapter = guidecfg.load_adapter(embedded)
+    front = (embedded.parent / "README.md").resolve()
+    assert front in [p.resolve() for p in guidecfg.pages(embedded, adapter, "all")]
+    assert front in [p.resolve() for p in guidecfg.pages(embedded, adapter, "shareable")]
+    assert front not in [p.resolve() for p in guidecfg.pages(embedded, adapter, "internal")]
+    edit(embedded / "guide.yaml", lambda d: d.pop("embedded"))
+    assert front not in [p.resolve() for p in guidecfg.pages(embedded, adapter, "all")]
+
+
+def test_helpers(embedded):
+    host = embedded.parent
+    assert guidecfg.host_toplevel(embedded).resolve() == host.resolve()
+    assert guidecfg.host_toplevel(Path("/")) is None
+    assert guidecfg.embedded_front_page(embedded).resolve() == (host / "README.md").resolve()
+    (embedded / "guide.yaml").unlink()
+    assert guidecfg.embedded_front_page(embedded) is None
+
+
+def test_is_guide_owned(embedded):
+    set_embedded(embedded, developer_readme="../DEVELOPMENT.md", stubs=["../docs/install.md"])
+    owned = lambda p: guidecfg.is_guide_owned(embedded, p)
+    assert owned("guide/docs/admin/install.md") and owned("guide/guide.yaml")
+    assert owned("README.md") and owned("DEVELOPMENT.md") and owned("docs/install.md")
+    assert not owned("src/cli.py") and not owned("USAGE.md") and not owned("guidebook.md")
+
+
+
+def test_developer_readme_need_not_be_markdown(embedded):
+    set_embedded(embedded, developer_readme="../HACKING.txt")
+    assert guidecfg.load_guide(embedded).embedded.developer_readme.name == "HACKING.txt"
+
+
+def test_local_confidential_file_ignored_by_separate_guides(render_fixture_guide):
+    write_local(render_fixture_guide, {"confidential_terms": ["Stray Term"], "confidential_patterns": ["[bad"]})
+    guide = guidecfg.load_guide(render_fixture_guide)
+    assert "Stray Term" not in guide.confidential_terms
+
+
+def test_discover_empty_directory_means_a_new_separate_guide(tmp_path):
+    """create on an empty directory follows the standalone flow: discover finds nothing (exit 4)."""
+    target = tmp_path / "new-guide"
+    target.mkdir()
+    proc = discover(target)
+    assert proc.returncode == 4 and proc.stdout == ""
+    with pytest.raises(guidecfg.DiscoverError) as err:
+        guidecfg.discover(target)
+    assert err.value.code == 4

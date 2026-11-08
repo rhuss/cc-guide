@@ -18,23 +18,26 @@ cc-guide does not reimplement subagent execution. The create and evolve skills r
 | `final-review-addendum.md` | the final reviewer | Cross-page consistency, persona journeys, boundary, deferred minors (FR-013) |
 | `style-rules.md` | implementers and reviewers when cc-prose is absent | Built-in voices and banned phrasing (FR-003a) |
 | `overview-contract.md` | the controller (spec and plan), implementers and reviewers of overview pages, the final reviewer | The why card, the four definition tests, the start page shape, the cold-reader test (FR-043) |
+| `front-page-contract.md` | embedded guides: the controller, the implementer and reviewer of the front page task, the final reviewer | The nine rules for the host README as the guide's front page (specs/005-embedded-guide) |
 
 ## Setup before the first dispatch
 
 The controller (the session running `/guide:create` or `/guide:evolve`) does this once per run, after the author approved the plan:
 
 1. Resolve the plan workspace: `bash tools/guide/sdd/sdd-workspace docs/guide/plan.md` (always `bash <script>`; the vendored SDD helper travels with the guide project as `tools/guide/sdd/`, so the controller never reads another plugin's install directory, FR-006). It prints the workspace directory, `.superpowers/sdd/plan/` or a disambiguated variant.
-2. Copy into the workspace: `page-procedure.md`, `page-review-guide.md`, `final-review-addendum.md`, `style-rules.md`, `overview-contract.md`, and the rendered `global-constraints.md` (the same text as the plan's Global Constraints section). Copy the guide's `styleguide.md` there too.
+2. Copy into the workspace: `page-procedure.md`, `page-review-guide.md`, `final-review-addendum.md`, `style-rules.md`, `overview-contract.md`, and the rendered `global-constraints.md` (the same text as the plan's Global Constraints section). For an embedded guide (`guide.yaml` has an `embedded` block) also copy `front-page-contract.md`. Copy the guide's `styleguide.md` there too.
 3. Let SDD create the ledger (`<workspace>/progress.md`, identity line naming `docs/guide/plan.md`), then record the pre-seeded rulings below as the first ruling lines, numbered `Ruling R1:` onwards, before the first dispatch.
 
 ## Dispatch additions
 
 - **Implementer of a page task**: add to the SDD implementer dispatch: "Before you start, read `<workspace>/page-procedure.md`, `<workspace>/global-constraints.md`, and the guide's `styleguide.md`. They bind this task and win over generic instructions where they differ. cc-prose is <present|absent>." When absent, also name `<workspace>/style-rules.md`.
 - **Implementer of the start page or a section overview page**: also name `<workspace>/overview-contract.md` and paste the spec's `## Why` card into the dispatch.
+- **Implementer of the front page** (embedded guides): name `<workspace>/front-page-contract.md` and `<workspace>/overview-contract.md`, paste the spec's `## Why` card, and say: "The page is the host README at `../README.md` from the guide root; keep the old README's badges and logo listed in the brief; read the `self` source in the directory printed by `uv run tools/guide/fetch.py where self`."
+- **Reviewer of the front page** (embedded guides): also name `<workspace>/front-page-contract.md` and `<workspace>/overview-contract.md`; its review additions and the cold-reader test are part of the review.
 - **Reviewer of the start page or a section overview page**: also name `<workspace>/overview-contract.md` and the spec's `## Why` card; the cold-reader test is part of the review.
 - **Implementer of a diagram task**: name the diagrams skill (`guide:diagrams`) and `<workspace>/global-constraints.md`, and require the claims file of its step 3a. The controller, not the implementer, reviews the export and the claims (FR-023a, FR-044).
 - **Reviewer of a page that shows a diagram**: add the path `diagrams/<name>.claims.yaml`; check 8 of the review guide applies.
-- **Task reviewer**: add: "Use `<workspace>/page-review-guide.md` as your review guide and output format. The pinned sources are under `.guide/cache/<source-id>/`." Pass the review package path from `review-package` as usual.
+- **Task reviewer**: add: "Use `<workspace>/page-review-guide.md` as your review guide and output format. Read each pinned source in the directory printed by `uv run tools/guide/fetch.py where <source-id>` (`.guide/cache/<source-id>/` for ordinary sources; the host snapshot for an embedded guide's `self`)." Pass the review package path from `review-package` as usual.
 - **Final reviewer** (`requesting-code-review`): add `<workspace>/final-review-addendum.md`, the deferred-minor and parked lines from the ledger, and the paths of `build/site` and `build/site-internal`.
 
 ## Rigor profiles (FR-021)

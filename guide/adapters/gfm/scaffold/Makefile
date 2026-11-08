@@ -5,6 +5,11 @@
 # `make site` also renders the pages with pandoc into build/site, so the leak check,
 # the packages, and the PDF work from a built view like in the other adapters.
 # Targets and their semantics are identical across adapters (contracts/adapter.md).
+# Embedded guides (a guide.yaml `embedded` block, specs/005-embedded-guide): the host
+# README is the front page. `site`, `check`, and `print-pdf` stage docs/ first
+# (tools/guide/embed.py stage) and render from build/stage/docs, where the front page
+# replaces the pointer page docs/README.md; `regions` includes the front page; `preview`
+# serves the host repository and opens README.md.
 SHELL := /bin/bash
 UV ?= uv
 TOOLS := tools/guide
@@ -26,6 +31,12 @@ PDF_OUT = slug=$$($(GET) slug) && date=$$($(GET) baseline.captured) || exit 1; \
 # The print document (pandoc/print.sh): navigation sections are h1.guide-section,
 # every page starts with h1.guide-page-title.
 PRINT_ARGS = --page-heading 'h1.guide-page-title' --section-heading 'h1.guide-section'
+# The docs directory to render, as the shell variable docs (staged for an embedded guide).
+STAGE = front=$$($(GET) embedded.front_page) || exit 1; docs=docs; \
+	if [ -n "$$front" ]; then $(UV) run --quiet $(TOOLS)/embed.py stage --out build/stage || exit 1; docs=build/stage/docs; fi
+# The directories (and the front page) holding generated regions, as the shell variable dirs.
+REGION_DIRS = dirs=docs; if [ -d internal ]; then dirs="docs internal"; fi; \
+	front=$$($(GET) embedded.front_page 2>/dev/null); if [ -n "$$front" ]; then dirs="$$dirs $$front"; fi
 
 .PHONY: help doctor fetch-baseline regions site site-internal check preview pdf print-pdf dist drift clean
 
@@ -52,11 +63,12 @@ fetch-baseline:
 	$(UV) run --quiet $(TOOLS)/fetch.py fetch
 
 regions:
-	@dirs=docs; if [ -d internal ]; then dirs="docs internal"; fi; \
+	@$(REGION_DIRS); \
 	$(UV) run --quiet $(TOOLS)/attrs.py regions --write $$dirs
 
 site: regions
-	bash pandoc/render.sh build/site docs:.
+	@$(STAGE); \
+	bash pandoc/render.sh build/site $$docs:.
 
 site-internal: regions
 	@if [ "$$($(GET) internal.enabled)" != true ]; then \
@@ -67,7 +79,7 @@ site-internal: regions
 
 check: fetch-baseline site site-internal
 	$(UV) run --quiet $(TOOLS)/guidecfg.py validate
-	@dirs=docs; if [ -d internal ]; then dirs="docs internal"; fi; \
+	@$(REGION_DIRS); \
 	$(UV) run --quiet $(TOOLS)/attrs.py regions $$dirs
 	STRICT=$(STRICT) $(UV) run --quiet $(TOOLS)/check.py
 	@if [ "$(STRICT)" = 1 ]; then $(UV) run --quiet $(TOOLS)/ledger.py; fi
@@ -75,7 +87,8 @@ check: fetch-baseline site site-internal
 
 preview:
 	@# The internal view serves the project root, so internal pages can link to docs/.
-	@if [ "$(VIEW)" = internal ]; then dir=.; start=internal/README.md; else dir=docs; start=; fi; \
+	@if [ -n "$$($(GET) embedded.front_page)" ]; then dir=$$(git rev-parse --show-toplevel); start=README.md; \
+	elif [ "$(VIEW)" = internal ]; then dir=.; start=internal/README.md; else dir=docs; start=; fi; \
 	$(MAKE) --no-print-directory regions && \
 	echo "Serving $$dir on http://127.0.0.1:$(PORT)/$$start with live reload (Ctrl-C to stop)" && \
 	{ $(OPEN_LATER); } && \
@@ -96,7 +109,8 @@ print-pdf: node_modules
 		view=shareable; \
 	fi; \
 	html=build/print-$$view/print.html; \
-	bash pandoc/print.sh $$view "$$html" || exit 1; \
+	$(STAGE); \
+	bash pandoc/print.sh $$view "$$html" $$docs || exit 1; \
 	mkdir -p dist; rm -f "$$out"; \
 	node $(TOOLS)/print-pdf.mjs --html "$$html" --guide-root . --view $$view --out "$$out" $(PRINT_ARGS) || exit 1; \
 	if [ $$view = shareable ]; then \

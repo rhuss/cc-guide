@@ -52,3 +52,14 @@ Files copied into a new guide project by create: build configuration, navigation
 | `antora` | Antora `~3.2`, two playbooks (generated from the main repository when the project is a linked worktree), RHDP showroom UI | `--attribute` from `baseline.yaml` | separate `internal` component | `antora-watch.mjs`: browser-sync, debounced rebuild, queued changes, last good site kept | `@antora/html-single-extension` |
 | `mkdocs` | MkDocs Material `>=9.5,<9.8`, `mkdocs-glightbox` | `mkdocs-macros-plugin` reading `baseline.yaml` | `mkdocs-internal.yml` with `INHERIT:` | `mkdocs serve` | `mkdocs-print-site-plugin ~=2.8` |
 | `gfm` | none (renders on GitHub) | generated regions rewritten by the toolkit | `internal/` beside `docs/` | `markserv` | Pandoc 3 standalone HTML in navigation order |
+
+## Embedded mode (gfm only, specs/005-embedded-guide)
+
+A gfm guide can live in one subdirectory of the repository it documents. `guide.yaml` then has an `embedded` block (`front_page`, `developer_readme`, `stubs`, `pr_check`), the host README is the front page, and `docs/README.md` is a one-line pointer to it (scaffolded by `scaffold-project.sh --embedded`, which also skips `internal/`). The make targets keep their names and meaning; when `guidecfg.py get embedded.front_page` is non-empty:
+
+- `site`, `check`, and `print-pdf` stage `docs/` with `tools/guide/embed.py stage --out build/stage` and render from `build/stage/docs`, where the front page replaces the pointer page and its links are rewritten (host files become `<web>/blob/<ref>/...` URLs, or plain text when the host has no GitHub `origin`).
+- `regions` also rewrites the generated regions of the front page.
+- `preview` serves the host repository and opens `README.md`.
+- `fetch-baseline` exports the `self` source with `git archive` outside the repository; it is never cloned into `.guide/cache/`.
+
+Separate guide repositories, Antora, and MkDocs behave as before.

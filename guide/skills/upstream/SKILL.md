@@ -23,7 +23,7 @@ The `/guide:upstream` command runs `guide:preflight` with `upstream`. When its r
 ## 2. Re-verify (FR-032)
 
 1. Mechanical: `uv run tools/guide/upstream.py reverify <ids>` (or `--all`). It fetches each source's default-branch head and searches every location's quote there, tolerating moved lines. Each line of output is `UF-n <status> <sha7>[: note]`.
-2. Semantic, for every finding (not only `needs-review`): open the cited files at the reverified commit (`git -C .guide/cache/<id>.git show <sha>:<path>`) and decide whether the problem still holds. Test behavior claims empirically where you can (a ten-line Makefile, a one-line script) instead of trusting a reading; two of four candidates in the SAW run did not hold.
+2. Semantic, for every finding (not only `needs-review`): open the cited files at the reverified commit (for an ordinary source `git -C .guide/cache/<id>.git show <sha>:<path>`; for an embedded guide's `self` source the snapshot printed by `uv run tools/guide/fetch.py where self --commit <sha>`; `uv run tools/guide/fetch.py where <id>` prints where each source is read) and decide whether the problem still holds. Test behavior claims empirically where you can (a ten-line Makefile, a one-line script) instead of trusting a reading; two of four candidates in the SAW run did not hold.
    - Still holds, text unchanged: keep `reverified`.
    - Still holds, but the text moved or changed: update the finding's `locations` (`ref` and `quote`) in `findings/upstream.yaml` and run `reverify` again.
    - No longer holds (fixed, intentional, or wrong): `uv run tools/guide/upstream.py record UF-n --status dropped --note "<why, with the commit>"`.

@@ -17,6 +17,10 @@ requires:
 # Shareable pages live under docs/, the internal part under internal/ beside it.
 # docs/README.md is the table of contents (navigation order); docs/SUMMARY.md lists the
 # same pages in the same order for the print assembly.
+# Embedded guides (specs/005-embedded-guide, gfm only): the guide lives in a subdirectory
+# of the repository it documents and the host README is the front page and navigation;
+# docs/README.md is then a one-line pointer to it, has no internal part, and the Makefile
+# stages docs/ with the front page (tools/guide/embed.py stage) for the site and the PDF.
 content_root: docs
 internal_root: internal
 page_glob: "**/*.md"

@@ -68,6 +68,19 @@ drift:
 upstream:
   target: github
 
+# Embedded guide (gfm only): the guide lives in this subdirectory of the repository it
+# documents, and the repository's README is the guide's front page. /guide:create writes
+# this block when the author chooses embedded mode; a guide in its own repository has none.
+# Paths are relative to the guide root. Confidential terms, patterns, and the locations of
+# confidential inputs go to confidential.local.yaml (git-ignored), not into this file;
+# internal.enabled stays false and the confidential lists above stay empty.
+# embedded:
+#   front_page: ../README.md             # the host README, owned by the guide
+#   developer_readme: ../DEVELOPMENT.md  # receives the old README's development sections
+#   stubs:                               # removed documentation paths kept as redirect stubs
+#     - ../docs/install.md
+#   pr_check: off                        # on when .github/workflows/guide-pr-check.yml is installed
+
 # Branding (antora format only; MkDocs and gfm guides fail validation with this block).
 # /guide:create writes it for every Antora guide; without it the guide shows the stock
 # Red Hat Demo Platform look. Set exactly one of logo_text, wordmark, or logo.

@@ -1,0 +1,17 @@
+# Confidential data of an embedded guide (specs/005-embedded-guide). Copy this file to
+# confidential.local.yaml in the guide root. The guide's .gitignore lists it, so it is
+# never committed; the checks and the leak check still read it.
+#
+# Exact terms (case-insensitive) that must never appear in the guide, for example
+# customer names.
+confidential_terms: []
+#  - ACME Corp
+
+# Regular expressions, for example a ticket key format.
+confidential_patterns: []
+#  - '\b[A-Z]{2,}-\d+\b'
+
+# Real locations of confidential inputs. inputs.yaml registers them as
+# `location: local:<id>`; run summaries, findings, and drift reports name only the id.
+inputs: {}
+#  call-2026-10: ~/transcripts/acme-call.txt

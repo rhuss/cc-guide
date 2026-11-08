@@ -636,3 +636,237 @@ def test_neutral_theme_skipped_for_invalid_block(branded_site):
                         pages={"guide/index.html": neutral_page(theme=False)})
     assert neutral_check(root) == []
     assert any("set exactly one of" in v.message for v in site_check(root))
+
+
+# --- embedded mode: the front page, self citations, developer README (T018) ------------
+
+import fetch  # noqa: E402
+from conftest import FRONT_PAGE, OWNERSHIP, commit_all, host_git, make_embedded_guide  # noqa: E402
+
+
+@pytest.fixture
+def emb(mini_host, tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "xdg"))
+    host, commit = mini_host
+    root = make_embedded_guide(host, commit, front_page=FRONT_PAGE)
+    (host / "DEVELOPMENT.md").write_text("# Development\n\nSee [CONTRIBUTING.md](CONTRIBUTING.md).\n")
+    fetch.pin(root, ["self=.."])
+    return root
+
+
+def echeck(root: Path, structure: bool = False, warnings: list | None = None):
+    return check.check_pages(root, guidecfg.load_guide(root), guidecfg.load_baseline(root),
+                             structure=structure, warnings=warnings)
+
+
+def set_front(root: Path, text: str) -> None:
+    (root.parent / "README.md").write_text(text)
+
+
+def test_embedded_guide_passes(emb):
+    warnings = []
+    assert echeck(emb, structure=True, warnings=warnings) == []
+    assert warnings == []
+
+
+def test_front_page_needs_a_source_block(emb):
+    set_front(emb, OWNERSHIP + "\n# Mini Host\n\nNo sources here.\n")
+    found = echeck(emb)
+    assert [(v.path, v.rule) for v in found] == [("../README.md", "source-block")]
+
+
+def test_front_page_broken_link(emb):
+    set_front(emb, FRONT_PAGE + "\nSee [gone](guide/docs/gone.md).\n")
+    found = echeck(emb)
+    assert [(v.path, v.rule) for v in found] == [("../README.md", "broken-link")]
+
+
+def test_front_page_dash(emb):
+    set_front(emb, FRONT_PAGE + f"\nFast {chr(0x2014)} and small.\n")
+    assert ("../README.md", "dash") in [(v.path, v.rule) for v in echeck(emb)]
+
+
+def test_front_page_local_confidential_term(emb):
+    (emb / "confidential.local.yaml").write_text("confidential_terms: [Greeting Corp]\n")
+    set_front(emb, FRONT_PAGE + "\nBuilt for Greeting Corp.\n")
+    assert [(v.path, v.rule) for v in echeck(emb)] == [("../README.md", "confidential")]
+
+
+def test_front_page_ownership_comment_first(emb):
+    set_front(emb, FRONT_PAGE.replace(OWNERSHIP + "\n", "") + "\n" + OWNERSHIP + "\n")
+    rules_found = [(v.path, v.rule) for v in echeck(emb)]
+    assert ("../README.md", "front-page") in rules_found
+
+
+WEB = "https://github.com/acme/mini-host"
+
+
+def set_web(root: Path, web: str = WEB) -> None:
+    """Record the `self` web URL (pin only writes it for a GitHub origin)."""
+    data = yaml.safe_load((root / "baseline.yaml").read_text())
+    next(s for s in data["sources"] if s["id"] == "self")["web"] = web
+    (root / "baseline.yaml").write_text(yaml.safe_dump(data, sort_keys=False))
+
+
+def test_front_page_absolute_links_pass(emb):
+    # absolute_links: true in the move plan writes <web>/blob/<ref>/<host path> links (FR-010)
+    set_web(emb)
+    set_front(emb, FRONT_PAGE.replace("(guide/docs/admin/install.md)",
+                                      f"({WEB}/blob/main/guide/docs/admin/install.md#steps)")
+              + f"\nBrowse [the sources]({WEB}/tree/main/src/) and the [license]({WEB}/blob/main/LICENSE).\n"
+              + f"\n[ref]: {WEB}/blob/main/guide/docs/admin/install.md\n")
+    assert echeck(emb) == []
+
+
+def test_front_page_absolute_link_to_renamed_page_fails(emb):
+    set_web(emb)
+    set_front(emb, FRONT_PAGE.replace("(guide/docs/admin/install.md)",
+                                      f"({WEB}/blob/main/guide/docs/admin/setup.md)")
+              + f"\nSee [the old notes]({WEB}/blob/main/docs/gone.md).\n"
+              + f"\n[cfg]: {WEB}/blob/main/guide/guide.yaml\n")
+    found = sorted((v.path, v.rule, v.message) for v in echeck(emb))
+    assert [(p, r) for p, r, _ in found] == [("../README.md", "broken-link")] * 3
+    messages = " ".join(m for _, _, m in found)
+    assert "guide/docs/admin/setup.md does not exist" in messages
+    assert "docs/gone.md does not exist" in messages
+    assert "guide/guide.yaml is not a guide page" in messages
+
+
+def test_front_page_absolute_links_elsewhere_are_ignored(emb):
+    set_web(emb)
+    set_front(emb, FRONT_PAGE
+              + "\nSee [another project](https://github.com/acme/other/blob/main/guide/docs/gone.md),"
+              + " [a mirror](https://gitlab.example.com/acme/mini-host/blob/main/gone.md),"
+              + f" and [an old release]({WEB}/blob/v0.1/guide/docs/gone.md).\n")
+    assert echeck(emb) == []
+
+
+def test_front_page_absolute_links_need_a_web_url(emb):
+    # without a recorded web URL nothing maps to the host; the links are left alone
+    set_front(emb, FRONT_PAGE + f"\nSee [gone]({WEB}/blob/main/guide/docs/gone.md).\n")
+    assert echeck(emb) == []
+
+
+def test_structure_reads_the_front_page(emb):
+    assert not [v for v in echeck(emb, structure=True) if v.rule == "guide-structure"]
+    # docs/SUMMARY.md lists "Admin guide", but the front page no longer does
+    set_front(emb, FRONT_PAGE.replace("## Admin guide", "## Administration"))
+    found = [v for v in echeck(emb, structure=True) if v.rule == "guide-structure"]
+    assert len(found) == 1 and "Admin guide" in found[0].message
+
+
+@pytest.mark.parametrize("cited", ["self:guide/docs/admin/install.md", "self:README.md",
+                                   "self:DEVELOPMENT.md", "self:docs/install.md"])
+def test_self_citation_of_guide_material_fails(emb, cited):
+    data = yaml.safe_load((emb / "guide.yaml").read_text())
+    data["embedded"].update(developer_readme="../DEVELOPMENT.md", stubs=["../docs/install.md"])
+    (emb / "guide.yaml").write_text(yaml.safe_dump(data, sort_keys=False))
+    write(emb, "docs/admin/x.md", f"# X\n\n<!-- Sources:\n{cited}\n-->\n\nBody.\n")
+    found = [v for v in echeck(emb) if v.rule == "self-citation"]
+    assert [v.path for v in found] == ["docs/admin/x.md"]
+
+
+def test_self_citation_without_fingerprint_warns(emb):
+    write(emb, "docs/admin/x.md", "# X\n\n<!-- Sources:\nself:USAGE.md\n-->\n\nBody.\n")
+    warnings = []
+    assert echeck(emb, warnings=warnings) == []
+    assert any("USAGE.md" in w and "rebaseline" in w for w in warnings), warnings
+
+
+def test_self_citations_resolve_without_cache(emb):
+    assert not (emb / ".guide" / "cache").exists()
+    write(emb, "docs/admin/x.md", "# X\n\n<!-- Sources:\nself:nope.py\nself:src/cli.py:1-400\n-->\n\nBody.\n")
+    found = [v for v in echeck(emb) if v.rule == "source-ref"]
+    assert len(found) == 2
+    assert "nope.py not found" in found[0].message and "beyond the end" in found[1].message
+
+
+def test_self_citations_after_squash_merge(emb):
+    host = emb.parent
+    host_git(host, "checkout", "--quiet", "-b", "work")
+    (host / "src" / "cli.py").write_text("\n".join(f"# line {i}" for i in range(1, 20)) + "\n")
+    host_git(host, "add", "src/cli.py")
+    host_git(host, "commit", "--quiet", "-m", "work")
+    fetch.rebaseline(emb, ["self=HEAD"])
+    host_git(host, "checkout", "--quiet", "main")
+    host_git(host, "branch", "-D", "work")
+    host_git(host, "reflog", "expire", "--expire=now", "--all")
+    host_git(host, "gc", "--quiet", "--prune=now")
+    warnings = []
+    # pyproject.toml and config/defaults.yaml resolve from their fingerprint blobs (still in
+    # main's history); src/cli.py's blob is gone, so it resolves against main with a warning
+    assert echeck(emb, warnings=warnings) == []
+    assert len(warnings) == 1 and "src/cli.py" in warnings[0] and "main" in warnings[0]
+
+
+def test_developer_readme_links_only(emb):
+    data = yaml.safe_load((emb / "guide.yaml").read_text())
+    data["embedded"]["developer_readme"] = "../DEVELOPMENT.md"
+    (emb / "guide.yaml").write_text(yaml.safe_dump(data, sort_keys=False))
+    dev = emb.parent / "DEVELOPMENT.md"
+    dev.write_text(f"# Development\n\nNo sources block {chr(0x2014)} moved text.\n\nSee [CONTRIBUTING.md](CONTRIBUTING.md).\n")
+    assert echeck(emb) == []
+    dev.write_text(dev.read_text() + "And [missing](docs/missing.md).\n")
+    found = echeck(emb)
+    assert [(v.path, v.rule) for v in found] == [("../DEVELOPMENT.md", "broken-link")]
+
+
+
+def test_developer_readme_reference_definitions_and_images(emb):
+    # moved text keeps reference-style links and HTML images; both must resolve (FR-024)
+    data = yaml.safe_load((emb / "guide.yaml").read_text())
+    data["embedded"]["developer_readme"] = "../DEVELOPMENT.md"
+    (emb / "guide.yaml").write_text(yaml.safe_dump(data, sort_keys=False))
+    dev = emb.parent / "DEVELOPMENT.md"
+    dev.write_text("# Development\n\nSee [the guide][c] and <img src=\"LICENSE\">.\n\n[c]: CONTRIBUTING.md\n")
+    assert echeck(emb) == []
+    dev.write_text("# Development\n\n<img src=\"img/gone.png\">\n\n[c]: docs/gone.md \"Title\"\n")
+    found = sorted((v.line, v.message) for v in echeck(emb))
+    assert found == [(3, "img/gone.png does not exist"), (5, "docs/gone.md does not exist")]
+    # footnotes, code spans, and data-src are not links
+    dev.write_text("# Development\n\nUse `<img src=\"dist/logo.png\">` here.[^1] <b data-src=\"x/y\"></b>\n\n"
+                   "[^1]: See the upstream notes.\n")
+    assert echeck(emb) == []
+
+
+def test_standalone_guides_unaffected_by_front_page_rules(tmp_path):
+    root = _md_project(tmp_path)
+    (root / "docs" / "index.md").write_text("# Index\n\n<!-- guide: no-sources -->\n")
+    assert check.check_pages(root, guidecfg.load_guide(root), guidecfg.load_baseline(root)) == []
+
+
+# --- stubs (T039) ------------------------------------------------------------------------
+
+
+def with_stub(root: Path, text: str, rel: str = "docs/install.md") -> Path:
+    data = yaml.safe_load((root / "guide.yaml").read_text())
+    data["embedded"]["stubs"] = [f"../{rel}"]
+    (root / "guide.yaml").write_text(yaml.safe_dump(data, sort_keys=False))
+    path = root.parent / rel
+    path.write_text(text)
+    return path
+
+
+def test_stub_with_resolving_link_passes(emb):
+    with_stub(emb, "<!-- guide: moved -->\n# Installation\n\nThis page moved to "
+                   "[Installation](../guide/docs/admin/install.md).\n")
+    assert echeck(emb) == []
+
+
+@pytest.mark.parametrize("text, needle", [
+    ("<!-- guide: moved -->\n# Installation\n\nThis page moved to [Installation](../guide/docs/gone.md).\n",
+     "does not exist"),
+    ("<!-- guide: moved -->\n# Installation\n\nSee [one](../README.md) and [two](../README.md).\n", "one link"),
+    ("# Installation\n\nThis page moved to [Installation](../README.md).\n", "marker"),
+])
+def test_bad_stubs_fail(emb, text, needle):
+    with_stub(emb, text)
+    found = [v for v in echeck(emb) if v.rule == "moved-stub"]
+    assert len(found) == 1 and found[0].path == "../docs/install.md" and needle in found[0].message
+
+
+def test_missing_stub_fails(emb):
+    path = with_stub(emb, "x")
+    path.unlink()
+    found = [v for v in echeck(emb) if v.rule == "moved-stub"]
+    assert len(found) == 1 and "not found" in found[0].message

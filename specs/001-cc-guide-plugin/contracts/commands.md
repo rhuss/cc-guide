@@ -6,7 +6,7 @@ The plugin `guide` exposes six slash commands. Each command file in `guide/comma
 
 Runs before any file is written; stops with an actionable message on failure (SC-009).
 
-1. Resolve the guide project: the current directory, or the directory given with `--dir`. Commands other than `create` require a `guide.yaml` there.
+1. Resolve the guide project with `tools/guide/guidecfg.py discover`: the current directory, or the directory given with `--dir`, when it holds `guide.yaml`; otherwise the one immediate subdirectory that holds an embedded guide (a `guide.yaml` with an `embedded` block, specs/005-embedded-guide FR-031). With several embedded guides the command stops and asks for the directory. Commands other than `create` require a `guide.yaml` there.
 2. Dependency check from `~/.claude/plugins/installed_plugins.json`:
    - `superpowers@*`: required for `create` and `evolve` (except `--check`). Read `installPath`; run the contract probe (see "Superpowers contract probe" below).
    - `prose@*`: optional; record `prose: present|absent` and show the one-line notice when absent.
@@ -25,7 +25,8 @@ Runs before any file is written; stops with an actionable message on failure (SC
 
 | Argument | Meaning |
 |---|---|
-| `--dir <path>` | Target directory (FR-005b). Default: current directory, which must be empty. |
+| `--dir <path>` | Target directory (FR-005b). Default: current directory, which must be empty, or the root of an existing repository for an embedded guide. |
+| `--embedded` | Embed the guide in the repository at the target (gfm only; specs/005-embedded-guide). |
 | `--format antora\|mkdocs\|gfm` | Adapter; asked if missing. |
 | `--rigor fast\|standard\|strict` | Default `standard`. |
 | `--source <id>=<repo>[@<ref>]` | Repeatable. Source repository to pin; `<id>` is the source id used in source blocks. |
@@ -36,6 +37,8 @@ Flow: preflight → intake interview (FR-006: audience, personas, scope, section
 
 Resume (FR-013a): rerunning `/guide:create` in a project with an unfinished ledger continues at the first unfinished task; with `--restart` it asks for confirmation and starts a new run.
 
+Target rules (FR-005b, specs/005-embedded-guide FR-001): an empty directory gets a guide in its own repository, and embedded mode is never offered there. The root of an existing git repository that is not a guide project gets the embedded offer: the guide goes into one subdirectory (default `guide/`), the root README becomes its front page, the host repository is the pinned source `self`, there is no internal part and no remote, and nothing outside the subdirectory changes before the author approves the move plan (inventory, developer README, stubs). A non-empty directory that is not a git repository, and a subdirectory of a repository, are refused.
+
 ## `/guide:evolve`
 
 | Argument | Meaning |
@@ -45,6 +48,8 @@ Resume (FR-013a): rerunning `/guide:create` in a project with an unfinished ledg
 | `--to <source-id>=<ref>` | Repeatable. Target revision per source; default is each source's tracked branch head. |
 | `--rigor ...` | As in create. |
 | `--adopt` | Adoption step for guides without a cc-guide baseline or source blocks (FR-028). |
+
+Embedded guides (specs/005-embedded-guide): the `self` source is compared by fingerprints (squash-safe), hand edits of the front page are reported before it is updated, and outside the guide subdirectory evolve changes only the front page and stub link targets (FR-009a, FR-014, FR-032). The optional pull request check runs `tools/guide/drift.py --pr` without an AI session.
 
 Flow: preflight → drift report → change-request re-evaluation → impact set (changed cited files, pages citing them, pages linking to those) → update plan for author approval → execution with the same reviews → new baseline only after checks pass (FR-029) → run summary.
 

@@ -2,7 +2,15 @@
 
 <!-- Rendered by the create and evolve skills into the guide plan (docs/guide/plan.md)
      and into the plan workspace as global-constraints.md. Fill every {{...}} from
-     guide.yaml, baseline.yaml, inputs.yaml, and the preflight result. -->
+     guide.yaml, baseline.yaml, inputs.yaml, and the preflight result. {{EMBEDDED_RULES}}
+     is empty for a guide in its own repository; for an embedded guide it is:
+     - Embedded guide: the front page is the host README (`../README.md` from the guide
+       root) and follows `front-page-contract.md`; `docs/README.md` stays a one-line
+       pointer to it. Links into the guide from the front page use host-relative paths
+       (`<guide dir>/docs/...`), or absolute `<web>/blob/<ref>/...` URLs when the move plan
+       set `absolute_links`. `self:` citations never name files inside `<guide dir>/`, the
+       front page, the developer README, or a stub. There is no internal part.
+       Confidential inputs are named only by their `local:<id>`. -->
 
 - Guide: "{{TITLE}}", format `{{FORMAT}}`, rigor `{{RIGOR}}`, cc-prose {{PROSE}} (present: write with the section voice profiles and run the prose check; absent: follow `style-rules.md`).
 - Baseline (captured {{CAPTURED}}); every statement is verified at these commits, never at a branch head:
@@ -20,6 +28,8 @@
 - Admonitions: only NOTE, TIP, IMPORTANT, WARNING, CAUTION, with their fixed meanings (see `page-procedure.md`).
 - Task pages: a why-paragraph, numbered steps with copy-paste commands, `Check:` lines with expectations.
 - The start page and the section overview pages follow `overview-contract.md`: why before how, the spec's `## Why` card as their content, every product defined from its own pinned source, and the cold-reader test as their review gate.
+- Read every pinned source in the directory printed by `uv run tools/guide/fetch.py where <source-id>`, never in the working tree of a repository.
+{{EMBEDDED_RULES}}
 - Diagrams follow the diagrams skill. Every label, arrow, and frame is a claim with a source in the diagram's claims file (`diagrams/<name>.claims.yaml`); where a product runs its parts comes from its own architecture documentation at the pinned version. Palette: platform gray (`#e9ecef`/`#495057`), governance orange (`#ffe8cc`/`#e8590c`), admin red (`#ffe3e3`/`#c92a2a`), user blue (`#d0ebff`/`#1971c2`); text and legends `#495057`.
 - Run every command from the guide project root with path arguments; never `cd` into `.guide/cache/`.
 - Containers: `podman`, never `docker`. Python packages: `uv`, never pip.

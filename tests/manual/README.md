@@ -11,6 +11,7 @@ Evidence for the final verification gate. Automated suites run with `make valida
 | [us6-validate.md](us6-validate.md) | 9 | procedure; needs cluster connections |
 | [002-antora-branding.md](002-antora-branding.md) | feature 002 quickstart 1 to 4 (Antora branding) | run; create and evolve session parts open |
 | [004-multi-harness.md](004-multi-harness.md) | feature 004 quickstart A to F (multi-harness) | automated parts run; Codex and OpenCode session parts open |
+| [embedded-quickstart.md](embedded-quickstart.md) | feature 005 quickstart 3 (embedded guide) | not yet run; automated parts covered by `test_gfm_embedded.sh` |
 
 ## Automated suites (2026-10-01, macOS, Node 26, uv 0.8, Pandoc 3.11)
 

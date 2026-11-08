@@ -12,7 +12,7 @@ Shows the rendered guide in a browser within a minute and keeps it current while
 ## Steps
 
 1. The `/guide:preview` command runs `guide:preflight` with `preview`. When its result is not already in this conversation (the skill was invoked directly, as it is on harnesses with no command layer), invoke `guide:preflight` with `preview` and `--dir` now (it needs a guide project and a passing `make doctor`); stop when it stops.
-2. View: `--internal` selects the internal view (`VIEW=internal`). When `guide.yaml` has `internal.enabled: false`, say there is no internal part and serve the shareable view.
+2. View: `--internal` selects the internal view (`VIEW=internal`). When `guide.yaml` has `internal.enabled: false`, say there is no internal part and serve the shareable view. An embedded guide (`uv run tools/guide/guidecfg.py get embedded.front_page` prints a path) has no internal part: `make preview` serves the host repository root and the start page is the front page, `README.md`, as GitHub shows it.
 3. Port: `--port N`, otherwise the adapter's `preview_port` from `tools/guide/adapter.yaml` (8000 by default). When the port is taken (`lsof -iTCP:<port> -sTCP:LISTEN`), pick the next free one and say so.
 4. Start the server in the background from the guide project root:
 
@@ -23,9 +23,9 @@ Shows the rendered guide in a browser within a minute and keeps it current while
    Run it with the Bash tool's background mode and remember the shell id. Per adapter this is:
    - antora: `tools/guide/preview-watch.mjs`: rebuilds 300 ms after a change, queues changes that arrive during a build, keeps the last good site when a build fails (and prints the error), and reloads the browser after each successful build
    - mkdocs: the same watcher with `mkdocs build --strict` into a staging directory, so a broken page keeps the last good site
-   - gfm: `markserv` with its own reload
+   - gfm: `markserv` with its own reload (an embedded guide: the host repository root, so the front page and its links into the guide subdirectory work as on GitHub)
 5. Wait until the URL answers (poll `curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:<port>/` until it returns 200, at most 60 seconds). When it does not come up, show the last lines of the server output and stop it.
-6. Open it on macOS with `open http://127.0.0.1:<port>/` (on Linux `xdg-open`). `OPEN=0` keeps the adapter from opening a second browser tab; run by hand, `make preview` opens the browser itself.
+6. Open it on macOS with `open http://127.0.0.1:<port>/` (for an embedded guide `open http://127.0.0.1:<port>/README.md`; on Linux `xdg-open`). `OPEN=0` keeps the adapter from opening a second browser tab; run by hand, `make preview` opens the browser itself.
 7. Report the URL, the view, that edits refresh the page, and how to stop it (ask Claude to stop the preview, or `kill` the background shell). When a build fails while preview runs, show the error; the last good site stays visible.
 
 ## Notes

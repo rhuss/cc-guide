@@ -1,0 +1,49 @@
+# Pull request check for an embedded cc-guide guide (specs/005-embedded-guide, FR-025 to FR-028).
+# Installed by /guide:create as .github/workflows/guide-pr-check.yml when the author opts in.
+# It examines only the host repository (the guide's `self` source): when a pull request
+# changes files that guide pages cite, it fails unless the pull request also re-verified
+# the guide (the `self` entry of baseline.yaml changed and its fingerprints match the
+# cited files at the pull request's head). Pull requests that change no cited file pass.
+# Maintainers add the label guide-skip when a change does not touch documented behavior.
+#
+# Needs no AI session, no tokens, and no other source; it only reads the repository and
+# reports through its result and the job summary. Whether it blocks merging is decided by
+# the repository's branch protection.
+name: guide pr check
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: {{GUIDE_DIR}}
+
+concurrency:
+  group: guide-pr-check-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  guide:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # the pull request's head, with the history that holds the base revision, whose
+          # blobs and baseline.yaml are compared with the head
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Check the guide against this pull request
+        env:
+          GUIDE_SKIP: ${{ contains(github.event.pull_request.labels.*.name, 'guide-skip') && '1' || '' }}
+        run: |
+          set -o pipefail
+          uv run tools/guide/drift.py --pr --base "${{ github.event.pull_request.base.sha }}" --head "${{ github.event.pull_request.head.sha }}" | tee -a "$GITHUB_STEP_SUMMARY"

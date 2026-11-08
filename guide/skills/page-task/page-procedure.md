@@ -2,7 +2,7 @@
 
 Every page task (create and evolve) follows these steps. Your task brief gives the task-specific inputs: the page path, its outline, its voice, the facts to verify with source hints, and the content rules for the page. Read `global-constraints.md` (in the same directory as this file) before you write anything; its rules bind every page.
 
-Run every command from the guide project root with path arguments. Never `cd` into `.guide/cache/`, and never run git there except as `git -C .guide/cache/<id> ...` from the root (repeated subagent stalls came from changing into the cache). If a `git` command is refused because a shell hook rewrites it (for example to `rtk git`), call `/usr/bin/git` directly.
+Run every command from the guide project root with path arguments. Never `cd` into `.guide/cache/`, and never run git there except as `git -C .guide/cache/<id> ...` from the root (repeated subagent stalls came from changing into the cache). Read each pinned source in the directory that `uv run tools/guide/fetch.py where <source-id>` prints: the cache worktree `.guide/cache/<id>/` for ordinary sources, and for the `self` source of an embedded guide a snapshot of the host repository at the pinned commit, outside the repository. If a `git` command is refused because a shell hook rewrites it (for example to `rtk git`), call `/usr/bin/git` directly.
 
 ## Steps
 
@@ -11,7 +11,7 @@ Run every command from the guide project root with path arguments. Never `cd` in
 2. **Write the skeleton.** Create the page with its title, an empty source block, and the stub marker (`// STUB` in AsciiDoc, `<!-- STUB -->` in Markdown), and add it to the navigation in the order the plan gives. Commit nothing yet.
 
 3. **Verify facts and list sources.** For every fact in the brief's fact list, and every further fact you plan to write:
-   - Find it in the pinned sources under `.guide/cache/<source-id>/` (for example `rg -n 'port' .guide/cache/mini/config/` or `sed -n '1,40p' .guide/cache/mini/Makefile`), or at a `url:` source.
+   - Find it in the pinned source directory printed by `uv run tools/guide/fetch.py where <source-id>` (for example `rg -n 'port' "$(uv run tools/guide/fetch.py where mini)/config/"` or `sed -n '1,40p' .guide/cache/mini/Makefile`), or at a `url:` source.
    - Add the exact file and line range to the page's source block: `<source-id>:<path>:<first>-<last>`.
    - A fact you cannot confirm does not go into the page. List it under "Unverified" in your report.
    - Write only what a cited source states. Units, defaults, side effects, and operational advice never come from general knowledge: when the source shows `timeout: 30` without a unit, the page gives the value without inventing one, and advice the source does not give (restart this, expose it like that) stays out.
@@ -188,3 +188,21 @@ Experimental labels: an anchor, then an IMPORTANT alert with the fixed first lin
 ```
 
 The merged tier starts with `> **Experimental: on main.**`. Cross-references are relative `.md` links; shareable pages in `docs/` never link into `internal/`. Diagrams link to the full-size SVG: `[![Architecture of minisvc](assets/diagrams/01-architecture.svg)](assets/diagrams/01-architecture.svg)`.
+
+#### gfm, embedded guide (the front page)
+
+In an embedded guide the host README (`../README.md` from the guide root) is the front page; `front-page-contract.md` in this directory has its nine rules. Its head looks like this:
+
+```markdown
+<!-- guide: front page. This file is generated and maintained by cc-guide; change it with /guide:evolve. -->
+# Mini Host
+
+[![CI](https://img.shields.io/badge/ci-passing-brightgreen.svg)](https://example.com/ci)
+
+<!-- Sources:
+self:src/cli.py:1-12
+self:pyproject.toml
+-->
+```
+
+`self:<path>` cites a file of the host repository at the pinned commit (read it in the directory printed by `uv run tools/guide/fetch.py where self`). Never cite files inside the guide subdirectory, the front page, the developer README, or a stub. Links from the front page into the guide are host-relative (`guide/docs/admin/install.md`); links from a guide page back to the front page are relative too (`../../../README.md` from `guide/docs/admin/x.md`). `make check` builds from a staged copy where the front page replaces `docs/README.md`.

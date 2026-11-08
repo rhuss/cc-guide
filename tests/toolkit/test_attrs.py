@@ -134,3 +134,47 @@ def test_regions_stop_on_branding_block(render_fixture_guide):
     assert proc.returncode == 1
     assert "guide.yaml:branding.logo_text: not supported by the gfm adapter" in proc.stderr
     assert page.read_text() == REGION_PAGE
+
+
+# --- embedded mode (T020) ----------------------------------------------------------------
+
+from conftest import FRONT_PAGE, make_embedded_guide  # noqa: E402
+
+
+@pytest.fixture
+def emb(mini_host):
+    host, commit = mini_host
+    front = FRONT_PAGE + "\nPinned at <!-- guide:attr self-commit-short -->0000000<!-- /guide:attr -->.\n"
+    return make_embedded_guide(host, commit, front_page=front)
+
+
+def set_web(root, web):
+    path = root / "baseline.yaml"
+    data = yaml.safe_load(path.read_text())
+    if web:
+        data["sources"][0]["web"] = web
+    else:
+        data["sources"][0].pop("web", None)
+    path.write_text(yaml.safe_dump(data, sort_keys=False))
+
+
+def test_regions_cover_the_front_page(emb, mini_host):
+    commit = mini_host[1]
+    baseline = guidecfg.load_baseline(emb)
+    changes = attrs.regions(emb, baseline, write=True)
+    assert [c.name for c in changes] == ["self-commit-short"]
+    assert f"-->{commit[:7]}<!--" in (emb.parent / "README.md").read_text()
+    assert attrs.regions(emb, baseline, write=False) == []
+
+
+def test_self_links_use_the_tracked_branch(emb, mini_host):
+    set_web(emb, "https://github.com/acme/mini-host")
+    v = attrs.values(guidecfg.load_baseline(emb))
+    assert v["self-repo"] == "https://github.com/acme/mini-host"
+    assert v["self-blob"] == "https://github.com/acme/mini-host/blob/main"
+    assert v["self-tree"] == "https://github.com/acme/mini-host/tree/main"
+    assert v["self-commit"] == mini_host[1]
+    set_web(emb, None)
+    v = attrs.values(guidecfg.load_baseline(emb))
+    assert "self-blob" not in v and "self-tree" not in v and "self-repo" not in v
+    assert v["self-commit"] == mini_host[1]

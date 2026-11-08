@@ -12,15 +12,27 @@ Run this before any other step of a `/guide:*` command. It writes no files. When
 ## Paths
 
 - `PLUGIN`: the plugin root, two directories above this skill's base directory (`<base>/../..`). Scripts live in `$PLUGIN/scripts/`, the toolkit in `$PLUGIN/toolkit/`, adapters in `$PLUGIN/adapters/`.
-- `GUIDE`: the guide project. Use `--dir PATH` when given, otherwise the current directory. Resolve it to an absolute path. Never `cd` into `.guide/cache/`.
+- `GUIDE`: the guide project, resolved in step 1 (`--dir PATH` when given, otherwise the current directory, or the embedded guide in one of its immediate subdirectories). Always an absolute path. Never `cd` into `.guide/cache/`.
 - `SESSION`: the directory this session was started in (the primary working directory in your environment information), resolved to an absolute path. On Claude Code the session's permissions are read from its `.claude/settings*.json` (at its git toplevel inside a repository) and from `~/.claude/settings.json`, not from the guide project's settings when the two differ. Other harnesses manage permissions differently and read no `.claude/settings*.json`.
 
 ## Steps
 
 ### 1. Guide project
 
+Resolve `GUIDE` first (FR-031). Let `DIR` be `--dir PATH` when given, otherwise the current directory, and run the discovery with the plugin's toolkit (the guide may have no toolkit yet):
+
+```bash
+uv run "$PLUGIN/toolkit/guidecfg.py" discover --dir "$DIR"
+```
+
+| Exit | Meaning | Action |
+|---|---|---|
+| 0 | It printed the guide root: `DIR` itself (it holds `guide.yaml`), or the one immediate subdirectory holding an embedded guide (a `guide.yaml` with an `embedded` block, for example `guide/` when you run from the root of the repository it documents) | Set `GUIDE` to the printed path. `embedded` is `yes` when its `guide.yaml` has an `embedded` block (`uv run "$PLUGIN/toolkit/guidecfg.py" get embedded.front_page --root "$GUIDE"` prints a path), else `no`. |
+| 3 | Several immediate subdirectories hold an embedded guide (it lists them) | Stop and ask which one to use: "Several embedded guides found: <list>. Run the command again with --dir <one of them>." |
+| 4 | No guide project in `DIR` or its immediate subdirectories | `GUIDE` is `DIR`. For `create` this is a new guide (the create skill decides between a separate and an embedded guide); for every other command except `evolve --adopt`, stop as below. |
+
 - For every command except `create` and `evolve --adopt`: `$GUIDE/guide.yaml` must exist. If it does not, stop:
-  > No guide project at `<GUIDE>` (guide.yaml not found). Run `/guide:create` to start one, or pass `--dir` with the guide project path.
+  > No guide project at `<GUIDE>` or in its immediate subdirectories (guide.yaml not found). Run `/guide:create` to start one, or pass `--dir` with the guide project path.
 
   When the directory already holds a guide that cc-guide did not create (a `baseline.yaml`, an Antora `antora.yml`, a `mkdocs.yml`, or a `docs/` directory), add: "To bring an existing guide under cc-guide, run `/guide:evolve --adopt`."
 - For `evolve --adopt`: `guide.yaml` may be missing; the adoption step writes it.
@@ -103,7 +115,7 @@ You can see your own model name in your system prompt; you cannot see the effort
 Report a compact block and hand it to the calling skill:
 
 ```text
-preflight: guide=<GUIDE> project=<exists|new> harness=<claude|codex|opencode> superpowers=<ok|unknown-version|not-needed> superpowers_version=<version|none> multi_agent=<yes|no> prose=<present|absent> excalidraw=<available|missing> excalidraw_allowed=<true|false|n/a> excalidraw_allowed_in=<paths|none> doctor=<ok|skipped|failed>
+preflight: guide=<GUIDE> project=<exists|new> embedded=<yes|no> harness=<claude|codex|opencode> superpowers=<ok|unknown-version|not-needed> superpowers_version=<version|none> multi_agent=<yes|no> prose=<present|absent> excalidraw=<available|missing> excalidraw_allowed=<true|false|n/a> excalidraw_allowed_in=<paths|none> doctor=<ok|skipped|failed>
 ```
 
 `excalidraw_allowed` is `n/a` on non-Claude harnesses.

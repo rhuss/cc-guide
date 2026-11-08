@@ -132,3 +132,12 @@ def test_cli(guide):
     proc = subprocess.run([sys.executable, str(TOOLKIT / "ledger.py"), "--root", str(guide),
                            "--ledger", str(ok)], capture_output=True, text=True)
     assert proc.returncode == 0, proc.stdout
+
+
+def test_embedded_ledger_lives_in_the_guide_root(mini_host):
+    import guidecfg
+    from conftest import make_embedded_guide
+    host, commit = mini_host
+    root = make_embedded_guide(host, commit)
+    adapter = guidecfg.load_adapter(root)
+    assert ledger.default_ledger(root, adapter) == root / "ledger" / "claims.md"

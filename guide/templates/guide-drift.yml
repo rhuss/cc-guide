@@ -3,6 +3,10 @@
 # It runs the check-only evolve mode (tools/guide/drift.py --check) and opens or updates
 # one issue labelled guide-drift. It never changes the guide itself.
 #
+# {{GUIDE_DIR}} is the guide project inside the repository: `.` for a guide in its own
+# repository, the guide subdirectory (for example `guide`) for an embedded guide, whose
+# workflows live in the host repository's .github/workflows/ (specs/005-embedded-guide).
+#
 # Private sources: add a repository secret GUIDE_SOURCES_TOKEN with read access to them.
 # Sources the job cannot read are reported as unchecked, never as unchanged.
 name: guide drift check
@@ -15,6 +19,10 @@ on:
 permissions:
   contents: read
   issues: write
+
+defaults:
+  run:
+    working-directory: {{GUIDE_DIR}}
 
 jobs:
   drift:

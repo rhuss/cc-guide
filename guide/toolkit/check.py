@@ -17,6 +17,13 @@ carry the Red Hat Demo Platform notice unless `footer` is `rhdp` (FR-032, rule
 `branding`). With `theme: neutral`, every page of those views must also load
 css/theme-neutral.css and no Google Fonts stylesheet, and _/font/ must hold the
 vendored fonts and OFL.txt (specs/003-neutral-branding FR-026).
+For an embedded guide (specs/005-embedded-guide), the front page (the host README) is a
+page like any other and must start with the ownership comment; `self:` citations must
+not cite guide material (the guide subdirectory, the front page, the developer README,
+or a stub), resolve in the host repository whether or not .guide/cache exists, and
+warn when the baseline has no fingerprint for them; the developer README's relative
+links must resolve (no page rules apply to it); --structure reads the section titles
+from the front page.
 Per-guide rules come from the optional guide-rules.yaml:
 
   rules:
@@ -35,6 +42,7 @@ import html
 import os
 import re
 import sys
+import urllib.parse
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -63,10 +71,18 @@ ABBREVIATIONS = {"e.g", "i.e", "etc", "vs", "cf", "approx", "fig", "no", "mr", "
 IMAGE_RE = re.compile(r"image::?([^\s\[\]]+)\[([^\]]*)\]")
 XREF_RE = sources.XREF_RE
 MD_LINK_RE = sources.MD_LINK_RE
+# Reference definitions (`[label]: target`) and src attributes, checked in the developer
+# README, whose moved text keeps both forms (FR-024).
+REFDEF_RE = re.compile(r"^\s{0,3}\[(?!\^)[^\]]+\]:\s*<?(\S+?)>?(?:\s.*)?$")   # not footnotes
+SRC_ATTR_RE = re.compile(r"(?<![\w-])src=\"([^\"]+)\"")
+CODE_SPAN_RE = re.compile(r"(`+)(?:(?!\1).)+?\1")
 SCHEME_RE = sources.SCHEME_RE
 STUB_LINE_RE = re.compile(r"^//\s*STUB\b")
 STUB_HTML_RE = re.compile(r"^<!--\s*STUB\b.*-->\s*$")
 # Generated regions (gfm adapter) hold baseline values written by attrs.py, not typed ones.
+# The first line of a redirect stub an embedded guide leaves at a removed documentation
+# path (not the STUB marker of an unfinished page).
+STUB_MARKER = "<!-- guide: moved -->"
 REGION_RE = re.compile(r"(<!--\s*guide:attr\s+[^\s>]+\s*-->).*?(<!--\s*/guide:attr\s*-->)")
 
 
@@ -82,8 +98,9 @@ class Violation:
 
 
 def _rel(path: Path, root: Path) -> str:
+    # relpath, so an embedded guide's front page prints as ../README.md
     try:
-        return Path(path).resolve().relative_to(Path(root).resolve()).as_posix()
+        return Path(os.path.relpath(Path(path).resolve(), Path(root).resolve())).as_posix()
     except ValueError:
         return str(path)
 
@@ -324,7 +341,10 @@ def _md_fence_mask(lines: list[str]) -> list[bool]:
 
 
 def check_structure(root: Path, guide: guidecfg.Guide, adapter: guidecfg.Adapter) -> list[Violation]:
-    """Every persona's entry page exists and every section title is in the navigation."""
+    """Every persona's entry page exists and every section title is in the navigation.
+
+    An embedded guide's navigation is its front page (FR-008a).
+    """
     root = Path(root)
     out: list[Violation] = []
     stems = {_rel(p, root).rsplit(".", 1)[0] for p in guidecfg.pages(root, adapter, "all")}
@@ -334,8 +354,11 @@ def check_structure(root: Path, guide: guidecfg.Guide, adapter: guidecfg.Adapter
         if not any(s == start or s.endswith("/" + start) for s in stems):
             out.append(Violation("guide.yaml", 0, "guide-structure",
                                  f"persona {persona.id!r}: entry page {persona.start!r} not found"))
-    nav_files = list(root.glob(f"{adapter.content_root}/modules/*/nav.adoc")) + \
-        [root / n for n in ("mkdocs.yml", "docs/SUMMARY.md", "docs/README.md") if (root / n).is_file()]
+    if guide.embedded is not None:
+        nav_files = [guide.embedded.front_page] if guide.embedded.front_page.is_file() else []
+    else:
+        nav_files = list(root.glob(f"{adapter.content_root}/modules/*/nav.adoc")) + \
+            [root / n for n in ("mkdocs.yml", "docs/SUMMARY.md", "docs/README.md") if (root / n).is_file()]
     nav = "\n".join(f.read_text(errors="replace") for f in nav_files)
     for section in guide.sections:
         if section.title and section.title not in nav:
@@ -486,10 +509,148 @@ def check_neutral_theme(root: Path, guide: guidecfg.Guide) -> list[Violation]:
     return out
 
 
+def _relative_links(path: Path, root: Path, text: str) -> list[Violation]:
+    """Broken relative links of a Markdown file outside fenced code blocks."""
+    out = []
+    lines = text.splitlines()
+    fenced = _md_fence_mask(lines)
+    for n, line in enumerate(lines, 1):
+        if fenced[n - 1]:
+            continue
+        # inline links and href (MD_LINK_RE), plus the forms embed.py rewrites when it moves
+        # text: reference definitions and src attributes (images)
+        for raw in _link_targets(line):
+            target = raw.split("#", 1)[0].split("?", 1)[0]
+            if not target or SCHEME_RE.match(target) or target.startswith("/") or "{{" in target:
+                continue
+            if not (path.parent / target).resolve().exists():
+                out.append(Violation(_rel(path, root), n, "broken-link", f"{target} does not exist"))
+    return out
+
+
+def _link_targets(line: str) -> list[str]:
+    """Link targets of a Markdown line: inline links, href and src attributes, and a
+    reference definition (footnotes and code spans excluded)."""
+    targets = [m.group(1) or m.group(2) or "" for m in MD_LINK_RE.finditer(line)]
+    targets += [m.group(1) for m in SRC_ATTR_RE.finditer(CODE_SPAN_RE.sub("", line))]
+    ref = REFDEF_RE.match(line)
+    if ref:
+        targets.append(ref.group(1))
+    return targets
+
+
+def _absolute_links(front: Path, root: Path, text: str, web: str, ref: str) -> list[Violation]:
+    """Broken absolute links of the front page into its own repository (FR-010).
+
+    With `absolute_links: true` in the move plan the front page links the guide as
+    `<web>/blob/<ref>/<host path>` (or `/tree/` for a directory), web and ref from the
+    `self` baseline entry. Such a link is mapped to the host path and must exist in the
+    host working tree; a link into the guide subdirectory must also name a guide page.
+    URLs of other repositories, hosts, or refs are not checked.
+    """
+    top = guidecfg.host_toplevel(root)
+    if top is None or not web:
+        return []
+    top = top.resolve()
+    guide_root = Path(root).resolve()
+    adapter = guidecfg.load_adapter(root, required=False)
+    pages = {p.resolve() for p in guidecfg.pages(root, adapter, "all")} if adapter is not None else set()
+    prefixes = tuple(f"{web.rstrip('/')}/{kind}/{ref}/" for kind in ("blob", "tree"))
+    out = []
+    lines = text.splitlines()
+    fenced = _md_fence_mask(lines)
+    for n, line in enumerate(lines, 1):
+        if fenced[n - 1]:
+            continue
+        for raw in _link_targets(line):
+            url = raw.split("#", 1)[0].split("?", 1)[0]
+            prefix = next((p for p in prefixes if url.startswith(p)), None)
+            if prefix is None:
+                continue
+            host_path = urllib.parse.unquote(url[len(prefix):]).strip("/")
+            target = (top / host_path).resolve()
+            if target != top and top not in target.parents:
+                out.append(Violation(_rel(front, root), n, "broken-link",
+                                     f"{url} points outside the repository"))
+            elif not target.exists():
+                out.append(Violation(_rel(front, root), n, "broken-link",
+                                     f"{url}: {host_path} does not exist"))
+            elif (target == guide_root or guide_root in target.parents) and target not in pages:
+                out.append(Violation(_rel(front, root), n, "broken-link",
+                                     f"{url}: {host_path} is not a guide page"))
+    return out
+
+
+def check_embedded(root: Path, guide: guidecfg.Guide,
+                   baseline: guidecfg.Baseline | None = None) -> list[Violation]:
+    """Front page ownership comment and absolute links, developer README links (embedded
+    guides only). Absolute links are checked when the baseline's `self` entry has a web URL."""
+    emb = guide.embedded
+    if emb is None:
+        return []
+    out: list[Violation] = []
+    front = emb.front_page
+    if front.is_file():
+        text = front.read_text(errors="replace")
+        first = text.splitlines()[:1]
+        if not first or first[0].strip() != sources.OWNERSHIP_COMMENT:
+            out.append(Violation(_rel(front, root), 1, "front-page",
+                                 "the first line must be the ownership comment: " + sources.OWNERSHIP_COMMENT))
+        src = baseline.source(guidecfg.SELF_ID) if baseline is not None else None
+        if src is not None and src.web:
+            # the same branch fallback as embed.py stage, which writes such links
+            out.extend(_absolute_links(front, root, text, src.web, src.ref or "main"))
+    dev = emb.developer_readme
+    if dev is not None:
+        if dev.is_file():
+            out.extend(_relative_links(dev, root, dev.read_text(errors="replace")))
+        else:
+            out.append(Violation("guide.yaml", 0, "developer-readme",
+                                 f"embedded.developer_readme {_rel(dev, root)} not found"))
+    return out
+
+
+def check_stubs(root: Path, guide: guidecfg.Guide) -> list[Violation]:
+    """Redirect stubs of an embedded guide (FR-023, FR-024): exactly one marker line (the
+    first), and exactly one link, which resolves. No page rules apply to a stub."""
+    if guide.embedded is None:
+        return []
+    out: list[Violation] = []
+    for stub in guide.embedded.stubs:
+        rel = _rel(stub, root)
+        if not stub.is_file():
+            out.append(Violation(rel, 0, "moved-stub", "stub not found (listed in guide.yaml embedded.stubs)"))
+            continue
+        lines = stub.read_text(errors="replace").splitlines()
+        markers = [n for n, line in enumerate(lines, 1) if line.strip() == STUB_MARKER]
+        if not lines or lines[0].strip() != STUB_MARKER or len(markers) != 1:
+            out.append(Violation(rel, 1, "moved-stub", f"the first line must be the marker {STUB_MARKER}, once"))
+        fenced = _md_fence_mask(lines)
+        links = [(n, (m.group(1) or m.group(2) or "")) for n, line in enumerate(lines, 1) if not fenced[n - 1]
+                 for m in MD_LINK_RE.finditer(line)]
+        if len(links) != 1:
+            out.append(Violation(rel, links[1][0] if len(links) > 1 else 1, "moved-stub",
+                                 f"a stub has exactly one link (found {len(links)})"))
+            continue
+        n, target = links[0]
+        path = target.split("#", 1)[0].split("?", 1)[0]
+        if SCHEME_RE.match(path) or not path:
+            continue
+        if not (stub.parent / path).resolve().exists():
+            out.append(Violation(rel, n, "moved-stub", f"{path} does not exist"))
+    return out
+
+
 def check_pages(root: Path, guide: guidecfg.Guide, baseline: guidecfg.Baseline,
-                strict: bool = False, structure: bool = False) -> list[Violation]:
-    """All content-check violations of a guide project."""
+                strict: bool = False, structure: bool = False,
+                warnings: list[str] | None = None) -> list[Violation]:
+    """All content-check violations of a guide project.
+
+    Warnings (problems that must not fail the check, such as a `self` citation without a
+    fingerprint) are appended to warnings when a list is given.
+    """
     root = Path(root)
+    warnings = warnings if warnings is not None else []
     adapter = guidecfg.load_adapter(root)
     style = "line" if adapter.comment == "line" else "html"
     out: list[Violation] = []
@@ -500,6 +661,7 @@ def check_pages(root: Path, guide: guidecfg.Guide, baseline: guidecfg.Baseline,
         inputs = guidecfg.Inputs(root=root)
 
     cache = root / ".guide" / "cache"
+    self_source = baseline.source(guidecfg.SELF_ID) if guide.embedded is not None else None
     typed = _typed_value_re(baseline)
     terms = [(t, re.compile(re.escape(t), re.I)) for t in guide.confidential_terms]
     patterns = [re.compile(p) for p in guide.confidential_patterns]
@@ -531,6 +693,20 @@ def check_pages(root: Path, guide: guidecfg.Guide, baseline: guidecfg.Baseline,
                 elif inputs.get(ref.input_id) is None:
                     out.append(Violation(rel, ref.line, "unknown-input",
                                          f"unknown input {ref.input_id!r} (not in inputs.yaml)"))
+            elif ref.kind == "source" and ref.source_id == guidecfg.SELF_ID and self_source is not None:
+                if guidecfg.is_guide_owned(root, ref.path):
+                    out.append(Violation(rel, ref.line, "self-citation",
+                                         f"{ref.raw}: the guide must not verify itself against its own text "
+                                         "(guide subdirectory, front page, developer README, or stub)"))
+                    continue
+                if ref.path not in self_source.fingerprints:
+                    warnings.append(f"{rel}:{ref.line}: [source-ref] warning: {ref.raw} has no fingerprint in "
+                                    "baseline.yaml; run `uv run tools/guide/fetch.py rebaseline --to self=HEAD`")
+                res = sources.resolve(ref, baseline, cache, inputs)
+                if not res.ok:
+                    out.append(Violation(rel, ref.line, "source-ref", res.message))
+                elif res.message.startswith("warning:"):
+                    warnings.append(f"{rel}:{ref.line}: [source-ref] {res.message}")
             elif ref.kind == "source" and cache.is_dir():
                 res = sources.resolve(ref, baseline, cache, inputs)
                 if not res.ok:
@@ -588,7 +764,10 @@ def check_pages(root: Path, guide: guidecfg.Guide, baseline: guidecfg.Baseline,
                         out.append(Violation(rel, n, "diagram-expand",
                                              f"diagram {target} needs role=expand so it opens enlarged on click"))
 
-    for f in _text_files(root, adapter):
+    text_files = _text_files(root, adapter)
+    if guide.embedded is not None and guide.embedded.front_page.is_file():
+        text_files.append(guide.embedded.front_page)
+    for f in text_files:
         try:
             text = f.read_text()
         except UnicodeDecodeError:
@@ -598,6 +777,8 @@ def check_pages(root: Path, guide: guidecfg.Guide, baseline: guidecfg.Baseline,
                 out.append(Violation(_rel(f, root), n, "dash", "em dash or en dash character; rephrase"))
 
     out.extend(_check_rules(root))
+    out.extend(check_embedded(root, guide, baseline))
+    out.extend(check_stubs(root, guide))
     if adapter.format == "antora" and guide.branding is not None:
         out.extend(check_branded_site(root, guide))
         out.extend(check_neutral_theme(root, guide))
@@ -615,13 +796,16 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     strict = args.strict or os.environ.get("STRICT", "") == "1"
     structure = args.structure or os.environ.get("STRUCTURE", "") == "1"
+    warnings: list[str] = []
     try:
         guide = guidecfg.load_guide(args.root)
         baseline = guidecfg.load_baseline(args.root)
-        violations = check_pages(args.root, guide, baseline, strict, structure)
+        violations = check_pages(args.root, guide, baseline, strict, structure, warnings)
     except guidecfg.ConfigError as err:
         print(err)
         return 1
+    for w in warnings:
+        print(w, file=sys.stderr)
     for v in violations:
         print(v)
     if violations:

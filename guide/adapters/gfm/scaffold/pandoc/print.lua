@@ -1,13 +1,14 @@
 -- Pandoc filter for the print document of a GitHub Markdown guide (gfm adapter, cc-guide).
--- Metadata: guide_root (absolute project path) and page_path (the page, relative to the
--- project root, for example docs/admin/install.md).
+-- Metadata: guide_root (absolute project path), page_path (the page, relative to the
+-- project root, for example docs/admin/install.md), and docs_dir (the docs directory the
+-- pages come from, default docs; build/stage/docs for an embedded guide).
 --   * the page's first h1 gets id <key with / as -> and data-guide-path=<key>, where the
 --     key is the page path without docs/ and .md (admin/install, internal/notes), so
 --     tools/guide/print-pdf.mjs can find every page and turn links into anchors
 --   * links between pages become project-relative keys (user/start.md#anchor)
 --   * images get absolute paths, so the print document can live anywhere
 --   * IMPORTANT alerts that start with "Experimental:" are marked as experimental labels
-local root, page_path = "", ""
+local root, page_path, docs_prefix = "", "", "^docs/"
 
 local function normalize(path)
   local parts = {}
@@ -26,7 +27,7 @@ local function dirname(path)
 end
 
 local function key_of(path)
-  return (path:gsub("^docs/", ""):gsub("%.md$", ""))
+  return (path:gsub(docs_prefix, ""):gsub("%.md$", ""))
 end
 
 local function is_relative(target)
@@ -36,6 +37,8 @@ end
 local function meta(m)
   root = pandoc.utils.stringify(m.guide_root or "")
   page_path = pandoc.utils.stringify(m.page_path or "")
+  local docs = pandoc.utils.stringify(m.docs_dir or "docs")
+  docs_prefix = "^" .. normalize(docs):gsub("%p", "%%%0") .. "/"
 end
 
 local seen_title = false
@@ -58,7 +61,7 @@ local function link(el)
   local path, frag = el.target:match("^([^#]*)(#?.*)$")
   local resolved = normalize(dirname(page_path) .. "/" .. path)
   if resolved:match("%.md$") then
-    el.target = resolved:gsub("^docs/", "") .. frag
+    el.target = resolved:gsub(docs_prefix, "") .. frag
   end
   return el
 end

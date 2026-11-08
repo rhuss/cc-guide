@@ -234,3 +234,31 @@ def test_skipped_reviews_are_not_dispatches(tmp_path):
     led = runs.parse_ledger(ledger)
     assert led.review_dispatches == 0
     assert led.tasks[1].status == "complete"
+
+
+# --- embedded guides: local inputs and dropped claims (specs/005-embedded-guide) --------
+
+
+def test_summary_and_findings_never_name_local_locations(workspace, mini_host, tmp_path):
+    from conftest import make_embedded_guide
+    host, commit = mini_host
+    root = make_embedded_guide(host, commit)
+    secret = tmp_path / "secret" / "acme-call.txt"
+    secret.parent.mkdir()
+    secret.write_text("call notes\n")
+    (root / "confidential.local.yaml").write_text(yaml.safe_dump({"inputs": {"call-1": str(secret)}}))
+    (root / "inputs.yaml").write_text(yaml.safe_dump({"inputs": [
+        {"id": "call-1", "kind": "transcript", "location": "local:call-1", "confidential": True}]}))
+    ledger = workspace / "progress.md"
+    ledger.write_text(ledger.read_text()
+                      + f"Task 1: finding rejected-by-source: {secret} claims port 80 (self:src/cli.py:4 says 9090)\n"
+                      + "Task 1: claim dropped: host-readme claims greet takes a name (self:src/cli.py:8 says no)\n")
+    out = runs.summary(root, workspace, "2026-11-07-create", command="create")
+    text = out.read_text()
+    assert str(secret) not in text and "local:call-1" in text
+    assert "## Dropped claims" in text and "greet takes a name" in text
+    fid = runs.findings_add(root, {"source": "self", "kind": "doc-drift",
+                                   "locations": [{"ref": "README.md:3", "quote": "x"}],
+                                   "summary": "README is wrong.", "evidence": f"{secret} says so"})
+    stored = (root / "findings" / "upstream.yaml").read_text()
+    assert fid == "UF-1" and str(secret) not in stored and "local:call-1 says so" in stored

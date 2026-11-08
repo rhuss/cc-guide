@@ -367,3 +367,47 @@ def test_sanitize_flags_token_after_private_key_block():
                 if p.kind == "secret"]
     assert any("Bearer" in p.match or "Authorization" in p.match for p in problems)
     assert not any(p.match == "summary line" for p in problems)
+
+
+# --- embedded mode (specs/005-embedded-guide, T027) ----------------------------------
+
+from conftest import commit_all, host_git, make_embedded_guide  # noqa: E402
+
+
+@pytest.fixture
+def emb(mini_host):
+    host, commit = mini_host
+    return make_embedded_guide(host, commit)
+
+
+def test_own_remotes_of_an_embedded_guide(emb):
+    host_git(emb.parent, "remote", "add", "origin", "https://github.com/acme/mini-host.git")
+    assert upstream._own_remotes(guidecfg.load_guide(emb)) == ["https://github.com/acme/mini-host.git"]
+
+
+def test_self_finding_reverified_from_the_host(emb):
+    host = emb.parent
+    quote = "Run `mini-host greet` to print a greeting."
+    write_findings(emb, [dict(finding("UF-1", "README.md:13", quote=quote), source="self")])
+    assert upstream.reverify(emb, "UF-1") == "reverified"
+    f = read_findings(emb)["UF-1"]
+    assert f["reverified_commit"] == host_git(host, "rev-parse", "HEAD")
+    assert not (emb / ".guide" / "cache" / "self.git").exists()
+    out = upstream.draft(emb, "UF-1", run_id="r1")
+    assert "README.md" in out.read_text()
+    (host / "README.md").write_text("# Mini Host\n\nRewritten.\n")
+    host_git(host, "add", "README.md")
+    host_git(host, "commit", "--quiet", "-m", "rewrite")
+    write_findings(emb, [dict(finding("UF-2", "README.md:13", quote=quote), source="self")])
+    assert upstream.reverify(emb, "UF-2") == "needs-review"
+
+
+def test_own_remotes_of_a_separate_guide_inside_another_repository(tmp_path, render_fixture_guide):
+    outer = tmp_path / "outer"
+    outer.mkdir()
+    subprocess.run(["git", "init", "-q", str(outer)], check=True)
+    subprocess.run(["git", "-C", str(outer), "remote", "add", "origin", "https://github.com/acme/outer.git"], check=True)
+    inner = outer / "guide"
+    import shutil
+    shutil.copytree(render_fixture_guide, inner)
+    assert upstream._own_remotes(guidecfg.load_guide(inner)) == []

@@ -115,3 +115,63 @@ def test_gfm_scaffold_has_no_branding_assets(tmp_path):
 def test_unknown_format(tmp_path):
     proc = run(REPO / "guide/scripts/scaffold-project.sh", "--format", "hugo", "--title", "T", tmp_path / "g")
     assert proc.returncode == 2 and "unknown format" in proc.stderr
+
+
+# --- embedded mode (specs/005-embedded-guide, T015) ----------------------------------
+
+
+def test_embedded_scaffold(tmp_path):
+    plugin = plugin_copy(tmp_path)
+    host = tmp_path / "host"
+    host.mkdir()
+    (host / "README.md").write_text("# Host\n")
+    guide = host / "guide"
+    proc = run(plugin / "scripts/scaffold-project.sh", "--format", "gfm", "--title", "Host", "--embedded", guide)
+    assert proc.returncode == 0, proc.stderr
+    assert not (guide / "internal").exists()
+    assert (guide / "docs" / "README.md").read_text() == \
+        (plugin / "adapters/gfm/embedded/docs/README.md").read_text()
+    assert "../../README.md" in (guide / "docs" / "README.md").read_text()
+    assert "kept existing" not in proc.stdout
+    ignore = (guide / ".gitignore").read_text().splitlines()
+    assert "confidential.local.yaml" in ignore
+    assert (guide / "docs" / "SUMMARY.md").is_file()
+    assert (guide / "tools" / "guide" / "adapter.yaml").is_file()
+    assert (host / "README.md").read_text() == "# Host\n"
+    # a second run is idempotent (resume): nothing duplicated in .gitignore
+    assert run(plugin / "scripts/scaffold-project.sh", "--format", "gfm", "--title", "Host", "--embedded",
+               guide).returncode == 0
+    (guide / "guide.yaml").write_text("schema: 1\n")
+    assert run(plugin / "scripts/scaffold-project.sh", "--format", "gfm", "--title", "Host", "--embedded",
+               guide).returncode == 0
+    assert (guide / ".gitignore").read_text().splitlines().count("confidential.local.yaml") == 1
+
+
+def test_embedded_scaffold_refuses_other_formats(tmp_path):
+    proc = run(REPO / "guide/scripts/scaffold-project.sh", "--format", "mkdocs", "--title", "T", "--embedded",
+               tmp_path / "g")
+    assert proc.returncode == 2 and "gfm" in proc.stderr
+    assert not (tmp_path / "g").exists()
+
+
+def test_embedded_scaffold_refuses_unrelated_directory(tmp_path):
+    target = tmp_path / "guide"
+    target.mkdir()
+    (target / "notes.txt").write_text("mine\n")
+    proc = run(REPO / "guide/scripts/scaffold-project.sh", "--format", "gfm", "--title", "T", "--embedded", target)
+    assert proc.returncode == 2 and "not a guide project" in proc.stderr
+    assert sorted(p.name for p in target.iterdir()) == ["notes.txt"]
+
+
+def test_standalone_scaffold_unchanged_by_embedded_overlay(tmp_path):
+    plugin = plugin_copy(tmp_path)
+    guide = tmp_path / "g"
+    assert run(plugin / "scripts/scaffold-project.sh", "--format", "gfm", "--title", "T", guide).returncode == 0
+    files = sorted(p.relative_to(guide).as_posix() for p in guide.rglob("*")
+                   if p.is_file() and "tools" not in p.relative_to(guide).parts)
+    scaffold = plugin / "adapters" / "gfm" / "scaffold"
+    expected = sorted(p.relative_to(scaffold).as_posix() for p in scaffold.rglob("*") if p.is_file())
+    assert files == expected
+    assert (guide / "docs" / "README.md").read_text() == \
+        (scaffold / "docs" / "README.md").read_text().replace("{{TITLE}}", "T")
+    assert "confidential.local.yaml" not in (guide / ".gitignore").read_text()

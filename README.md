@@ -27,6 +27,8 @@ The method comes from building the [Secure Agent Workspace](https://github.com/v
 
 All three share one contract: the same `make` targets (`doctor`, `fetch-baseline`, `site`, `site-internal`, `check`, `preview`, `pdf`, `dist`, `drift`), baseline values injected at build time instead of typed versions, an optional internal part that never reaches the shareable build, and content checks that fail the build. Details are in [`guide/docs/adapters.md`](guide/docs/adapters.md).
 
+A `gfm` guide can also live inside the repository it documents (embedded mode): the guide sits in one subdirectory, the repository's README becomes the guide's source-verified front page, development material moves to a developer README, and `/guide:evolve` keeps the README current as the code changes. Run `/guide:create` at the root of an existing repository, or pass `--embedded`. See [`guide/docs/embedded.md`](guide/docs/embedded.md).
+
 ## Install
 
 cc-guide runs on Claude Code (primary), Codex, and OpenCode from one plugin directory. Each harness reads only its own entry point and resolves the same shared skills, so the command set and behavior are the same across harnesses except for the documented degradations below.
