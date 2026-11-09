@@ -1,6 +1,6 @@
 # Brainstorm Overview
 
-Last updated: 2026-11-07
+Last updated: 2026-11-09
 
 ## Sessions
 
@@ -11,6 +11,7 @@ Last updated: 2026-11-07
 | 03 | 2026-10-15 | strict-claim-ledger | parked | - | - |
 | 04 | 2026-11-06 | multi-harness-support | active | - | - |
 | 05 | 2026-11-07 | embedded-guide | active | - | - |
+| 06 | 2026-11-09 | author-owned-front-page-region | active | - | - |
 
 ## Open Threads
 - How does cc-guide detect superpowers version drift (renamed skills or scripts), and what is the fallback? (from #01)
@@ -42,6 +43,11 @@ Last updated: 2026-11-07
 - How a pull request updating code and guide together moves the `self` pin forward (from #05)
 - How create detects an existing repository and switches to embedded mode (from #05)
 - Link handling between the root README and `guide/` (from #05)
+- Exact marker spelling and the plain-guide ownership comment (from #06)
+- Config shape of the publish declaration: guide.yaml key, source page, target path, defaults (from #06)
+- How `--check` and drift report a missing, unbalanced, or duplicated region (from #06)
+- gfm-only in v1 or a general adapter "publish" capability (from #06)
+- Whether checks warn about relative links in the author region when a registry publishes the README (from #06)
 
 ## Parked Ideas
 - Strict rigor without a claim ledger (#03)
