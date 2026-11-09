@@ -19,6 +19,7 @@ Run every command from the guide project root with path arguments. Never `cd` in
    - Quotes from a transcript appear only verbatim. Anything you rephrase is a paraphrase without quotation marks.
    - Content whose only support is an input marked `confidential` in `inputs.yaml` may appear only on internal pages, cited there as `input:<id>` in the source block. Never cite `input:` on a shareable page.
    - When a source contradicts itself (for example a README value that differs from the configuration default), the page follows the code or configuration, and you list the location pair under "Upstream candidates" in your report with the exact text at each location.
+   - On the front page of an embedded guide or the source page of a published region, read the author text outside the `guide:region` markers and flag contradictions with the guide region or the pinned sources as non-blocking findings in the run summary; never fail a check over author text (FR-014, FR-013).
 
 4. **Draft the page.**
    - Start the body directly after the title and the source block.

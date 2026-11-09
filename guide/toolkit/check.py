@@ -50,6 +50,7 @@ import yaml
 
 import branding
 import guidecfg
+import region
 import sources
 
 DASH_RE = re.compile("[" + chr(0x2013) + chr(0x2014) + "]")
@@ -359,7 +360,18 @@ def check_structure(root: Path, guide: guidecfg.Guide, adapter: guidecfg.Adapter
     else:
         nav_files = list(root.glob(f"{adapter.content_root}/modules/*/nav.adoc")) + \
             [root / n for n in ("mkdocs.yml", "docs/SUMMARY.md", "docs/README.md") if (root / n).is_file()]
-    nav = "\n".join(f.read_text(errors="replace") for f in nav_files)
+
+    def nav_text(path: Path) -> str:
+        """A navigation file's text; an embedded front page narrows to its region
+        (specs/006: section titles must be linked by guide-owned text, and author
+        text must not satisfy the check by coincidence)."""
+        text = path.read_text(errors="replace")
+        try:
+            return region.parse(text).content
+        except region.RegionError:
+            return text  # check_embedded reports the malformed markers
+
+    nav = "\n".join(nav_text(f) for f in nav_files)
     for section in guide.sections:
         if section.title and section.title not in nav:
             out.append(Violation("guide.yaml", 0, "guide-structure",
@@ -592,10 +604,22 @@ def check_embedded(root: Path, guide: guidecfg.Guide,
     front = emb.front_page
     if front.is_file():
         text = front.read_text(errors="replace")
-        first = text.splitlines()[:1]
-        if not first or first[0].strip() != sources.OWNERSHIP_COMMENT:
-            out.append(Violation(_rel(front, root), 1, "front-page",
-                                 "the first line must be the ownership comment: " + sources.OWNERSHIP_COMMENT))
+        try:
+            parsed = region.parse(text)
+        except region.RegionError:
+            # malformed markers are reported by the page rules (check_pages);
+            # the ownership comment cannot be located without a valid region
+            parsed = None
+        if parsed is not None:
+            # FR-011: the ownership comment is guide-written, so it sits inside the
+            # region (first line of the file without markers, FR-002); a marked front
+            # page states that the region is guide-owned and the rest is the author's
+            expected = sources.OWNERSHIP_COMMENT_REGION if parsed.marked else sources.OWNERSHIP_COMMENT
+            first = parsed.content.splitlines()[:1]
+            if not first or first[0].strip() != expected:
+                out.append(Violation(_rel(front, root), parsed.begin_line + 1, "front-page",
+                                     "the first line of the guide-owned region (of the file without "
+                                     "markers) must be the ownership comment: " + expected))
         src = baseline.source(guidecfg.SELF_ID) if baseline is not None else None
         if src is not None and src.web:
             # the same branch fallback as embed.py stage, which writes such links
@@ -607,6 +631,32 @@ def check_embedded(root: Path, guide: guidecfg.Guide,
         else:
             out.append(Violation("guide.yaml", 0, "developer-readme",
                                  f"embedded.developer_readme {_rel(dev, root)} not found"))
+    return out
+
+
+def check_publish(root: Path, guide: guidecfg.Guide) -> list[Violation]:
+    """The publish target of a guide with a publish block (specs/006, story 1).
+
+    The target is the author's file: only the region between the markers is
+    guide-owned. Two rules apply anyway (FR-008): the marker pair must be
+    balanced and unique (region.parse, rules region-unbalanced and
+    region-duplicate), and relative links anywhere in the file, author text
+    included, must resolve. Author text is never checked for anything else.
+    """
+    if guide.publish is None:
+        return []
+    target = guide.publish.target
+    rel = _rel(target, root)
+    if not target.is_file():
+        return [Violation(rel, 0, "publish-target", "publish target not found; create it with a "
+                            f"{region.MARKER_BEGIN} / {region.MARKER_END} pair")]
+    text = target.read_text(errors="replace")
+    out: list[Violation] = []
+    try:
+        region.parse(text)
+    except region.RegionError as err:
+        out.append(Violation(rel, err.line, err.rule, str(err)))
+    out.extend(_relative_links(target, root, text))
     return out
 
 
@@ -641,6 +691,28 @@ def check_stubs(root: Path, guide: guidecfg.Guide) -> list[Violation]:
     return out
 
 
+def _md_link_rules(rel: str, page: Path, lines: list[str], fenced: list[bool],
+                   internal: bool, internal_dir: Path, out: list[Violation]) -> None:
+    """internal-link and broken-link over the whole text of a Markdown page.
+
+    Used for a front page that carries the region markers: its other rules narrow to
+    the region (FR-003), but the link rules read the entire file, author text
+    included, at file line numbers (FR-008, the single exception).
+    """
+    for n, line in enumerate(lines, 1):
+        if fenced[n - 1]:
+            continue
+        for m in MD_LINK_RE.finditer(line):
+            target = (m.group(1) or m.group(2) or "").split("#", 1)[0].split("?", 1)[0]
+            if not target or SCHEME_RE.match(target) or target.startswith("/") or "{{" in target:
+                continue
+            resolved = (page.parent / target).resolve()
+            if not internal and (resolved == internal_dir or internal_dir in resolved.parents):
+                out.append(Violation(rel, n, "internal-link", f"{target} links into the internal part"))
+            elif not resolved.exists():
+                out.append(Violation(rel, n, "broken-link", f"{target} does not exist"))
+
+
 def check_pages(root: Path, guide: guidecfg.Guide, baseline: guidecfg.Baseline,
                 strict: bool = False, structure: bool = False,
                 warnings: list[str] | None = None) -> list[Violation]:
@@ -672,9 +744,26 @@ def check_pages(root: Path, guide: guidecfg.Guide, baseline: guidecfg.Baseline,
         internal_modules = (_antora_modules(root, adapter.internal_root)
                             - _antora_modules(root, adapter.content_root)) or {"internal"}
 
+    front_res = guide.embedded.front_page.resolve() if guide.embedded is not None else None
+
     for page in guidecfg.pages(root, adapter, "all"):
         rel = _rel(page, root)
         text = page.read_text(errors="replace")
+        # specs/006: a marked front page narrows every page rule to its region (FR-003);
+        # only the link rules keep reading the whole file (FR-008). Violation lines are
+        # offset to file lines; a malformed marker pair is reported and skips the page.
+        offset = 0
+        whole: list[str] | None = None
+        if front_res is not None and page.resolve() == front_res:
+            try:
+                front_region = region.parse(text)
+            except region.RegionError as err:
+                out.append(Violation(rel, err.line, err.rule, str(err)))
+                continue
+            if front_region.marked:
+                offset = front_region.begin_line
+                whole = text.splitlines()
+                text = front_region.content
         lines = text.splitlines()
         internal = guidecfg.is_internal(page, root, adapter)
         is_adoc = page.suffix in (".adoc", ".asciidoc")
@@ -684,29 +773,29 @@ def check_pages(root: Path, guide: guidecfg.Guide, baseline: guidecfg.Baseline,
         fenced = _md_fence_mask(lines) if not is_adoc else [False] * len(lines)
 
         for p in sources.check_text(text, style, rel):
-            out.append(Violation(rel, p.line, "source-block", p.message))
+            out.append(Violation(rel, p.line + offset, "source-block", p.message))
         for ref in (block.refs if block else []):
             if ref.kind == "input":
                 if not internal:
-                    out.append(Violation(rel, ref.line, "input-on-shareable",
+                    out.append(Violation(rel, ref.line + offset, "input-on-shareable",
                                          f"{ref.raw}: input references are allowed only on internal pages"))
                 elif inputs.get(ref.input_id) is None:
-                    out.append(Violation(rel, ref.line, "unknown-input",
+                    out.append(Violation(rel, ref.line + offset, "unknown-input",
                                          f"unknown input {ref.input_id!r} (not in inputs.yaml)"))
             elif ref.kind == "source" and ref.source_id == guidecfg.SELF_ID and self_source is not None:
                 if guidecfg.is_guide_owned(root, ref.path):
-                    out.append(Violation(rel, ref.line, "self-citation",
+                    out.append(Violation(rel, ref.line + offset, "self-citation",
                                          f"{ref.raw}: the guide must not verify itself against its own text "
                                          "(guide subdirectory, front page, developer README, or stub)"))
                     continue
                 if ref.path not in self_source.fingerprints:
-                    warnings.append(f"{rel}:{ref.line}: [source-ref] warning: {ref.raw} has no fingerprint in "
-                                    "baseline.yaml; run `uv run tools/guide/fetch.py rebaseline --to self=HEAD`")
+                    warnings.append(f"{rel}:{ref.line + offset}: [source-ref] warning: {ref.raw} has no fingerprint "
+                                    "in baseline.yaml; run `uv run tools/guide/fetch.py rebaseline --to self=HEAD`")
                 res = sources.resolve(ref, baseline, cache, inputs)
                 if not res.ok:
-                    out.append(Violation(rel, ref.line, "source-ref", res.message))
+                    out.append(Violation(rel, ref.line + offset, "source-ref", res.message))
                 elif res.message.startswith("warning:"):
-                    warnings.append(f"{rel}:{ref.line}: [source-ref] {res.message}")
+                    warnings.append(f"{rel}:{ref.line + offset}: [source-ref] {res.message}")
             elif ref.kind == "source" and cache.is_dir():
                 res = sources.resolve(ref, baseline, cache, inputs)
                 if not res.ok:
@@ -716,27 +805,29 @@ def check_pages(root: Path, guide: guidecfg.Guide, baseline: guidecfg.Baseline,
         for n, line in enumerate(lines, 1):
             in_block = n in span
             if strict and stub_re.match(line.strip()):
-                out.append(Violation(rel, n, "stub", "unfinished stub page"))
+                out.append(Violation(rel, n + offset, "stub", "unfinished stub page"))
             if typed and not in_block:
                 for m in typed.finditer(REGION_RE.sub(r"\1\2", line)):
-                    out.append(Violation(rel, n, "typed-value",
+                    out.append(Violation(rel, n + offset, "typed-value",
                                          f"typed version or commit {m.group(0)!r}; use a baseline attribute"))
             if is_adoc and not mask[n - 1] and not in_block and _prose_line(line) and _sentence_problem(line):
-                out.append(Violation(rel, n, "sentence-per-line", "more than one sentence on this line"))
+                out.append(Violation(rel, n + offset, "sentence-per-line", "more than one sentence on this line"))
             if not internal:
                 for term, rx in terms:
                     if rx.search(line):
-                        out.append(Violation(rel, n, "confidential", f"confidential term {term!r} on a shareable page"))
+                        out.append(Violation(rel, n + offset, "confidential",
+                                             f"confidential term {term!r} on a shareable page"))
                 for rx in patterns:
                     m = rx.search(line)
                     if m:
-                        out.append(Violation(rel, n, "confidential",
+                        out.append(Violation(rel, n + offset, "confidential",
                                              f"confidential pattern match {m.group(0)!r} on a shareable page"))
                 if is_adoc:
                     for m in XREF_RE.finditer(line):
                         if _xref_module(m.group(1)) in internal_modules:
-                            out.append(Violation(rel, n, "internal-link", f"xref:{m.group(1)} links into the internal part"))
-                else:
+                            out.append(Violation(rel, n + offset, "internal-link",
+                                                 f"xref:{m.group(1)} links into the internal part"))
+                elif whole is None:
                     for m in MD_LINK_RE.finditer(line):
                         target = (m.group(1) or m.group(2) or "").split("#", 1)[0].split("?", 1)[0]
                         if not target or SCHEME_RE.match(target) or target.startswith("/"):
@@ -744,7 +835,7 @@ def check_pages(root: Path, guide: guidecfg.Guide, baseline: guidecfg.Baseline,
                         resolved = (page.parent / target).resolve()
                         if resolved == internal_dir or internal_dir in resolved.parents:
                             out.append(Violation(rel, n, "internal-link", f"{target} links into the internal part"))
-            if not is_adoc and not fenced[n - 1]:
+            if whole is None and not is_adoc and not fenced[n - 1]:
                 for m in MD_LINK_RE.finditer(line):
                     target = (m.group(1) or m.group(2) or "").split("#", 1)[0].split("?", 1)[0]
                     if not target or SCHEME_RE.match(target) or target.startswith("/") or "{{" in target:
@@ -758,11 +849,15 @@ def check_pages(root: Path, guide: guidecfg.Guide, baseline: guidecfg.Baseline,
                 for m in IMAGE_RE.finditer(line):
                     target, attrlist = m.group(1), m.group(2)
                     if _alt_comma_unquoted(attrlist):
-                        out.append(Violation(rel, n, "image-alt",
+                        out.append(Violation(rel, n + offset, "image-alt",
                                              f"alt text of {target} contains a comma; quote it: [\"...\"]"))
                     if adapter.format == "antora" and Path(target).stem in diagrams and not _has_role_expand(attrlist):
-                        out.append(Violation(rel, n, "diagram-expand",
+                        out.append(Violation(rel, n + offset, "diagram-expand",
                                              f"diagram {target} needs role=expand so it opens enlarged on click"))
+        if whole is not None:
+            # FR-008: the link rules of a marked front page read the whole file,
+            # author text included, at file line numbers
+            _md_link_rules(rel, page, whole, _md_fence_mask(whole), internal, internal_dir, out)
 
     text_files = _text_files(root, adapter)
     if guide.embedded is not None and guide.embedded.front_page.is_file():
@@ -772,12 +867,22 @@ def check_pages(root: Path, guide: guidecfg.Guide, baseline: guidecfg.Baseline,
             text = f.read_text()
         except UnicodeDecodeError:
             continue
+        offset = 0
+        if front_res is not None and f.resolve() == front_res:
+            # specs/006: the dash rule reads the region of a marked front page only
+            try:
+                parsed = region.parse(text)
+            except region.RegionError:
+                parsed = None  # reported by the page rules
+            if parsed is not None and parsed.marked:
+                text, offset = parsed.content, parsed.begin_line
         for n, line in enumerate(text.splitlines(), 1):
             if DASH_RE.search(line):
-                out.append(Violation(_rel(f, root), n, "dash", "em dash or en dash character; rephrase"))
+                out.append(Violation(_rel(f, root), n + offset, "dash", "em dash or en dash character; rephrase"))
 
     out.extend(_check_rules(root))
     out.extend(check_embedded(root, guide, baseline))
+    out.extend(check_publish(root, guide))
     out.extend(check_stubs(root, guide))
     if adapter.format == "antora" and guide.branding is not None:
         out.extend(check_branded_site(root, guide))

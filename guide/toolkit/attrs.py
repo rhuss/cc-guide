@@ -36,6 +36,7 @@ from pathlib import Path
 
 import branding
 import guidecfg
+import region
 
 
 def values(baseline: guidecfg.Baseline) -> dict[str, str]:
@@ -103,6 +104,10 @@ def regions(root: Path, baseline: guidecfg.Baseline, write: bool,
     Raises RegionError (and writes nothing) when a region names an unknown attribute.
     Idempotent: a second call finds nothing to change. Without dirs, an embedded guide's
     front page is included.
+
+    A file carrying the author-region markers (specs/006, research R7) is rewritten in
+    its region only: attr markers in author text are neither rewritten nor unknown-attribute
+    errors. A file with malformed markers is left alone (check.py reports the markers).
     """
     root = Path(root)
     vals = values(baseline)
@@ -122,9 +127,14 @@ def regions(root: Path, baseline: guidecfg.Baseline, write: bool,
     unknown: list[str] = []
     for path in files:
         text = path.read_text()
-        for m in REGION_RE.finditer(text):
+        try:
+            parsed = region.parse(text)
+        except region.RegionError:
+            continue
+        content = parsed.content
+        for m in REGION_RE.finditer(content):
             name, old = m.group(1), m.group(2)
-            line = text.count("\n", 0, m.start()) + 1
+            line = parsed.begin_line + content.count("\n", 0, m.start()) + 1
             if name not in vals:
                 unknown.append(f"{path}:{line}: unknown baseline attribute {name!r}")
                 continue
@@ -132,9 +142,9 @@ def regions(root: Path, baseline: guidecfg.Baseline, write: bool,
                 changes.append(Change(path, line, name, old, vals[name]))
         if write:
             new = REGION_RE.sub(lambda m: (f"<!-- guide:attr {m.group(1)} -->{vals[m.group(1)]}<!-- /guide:attr -->"
-                                           if m.group(1) in vals else m.group(0)), text)
-            if new != text:
-                updated[path] = new
+                                           if m.group(1) in vals else m.group(0)), content)
+            if new != content:
+                updated[path] = region.splice(text, new)
     if unknown:
         raise RegionError("\n".join(unknown))
     for path, text in updated.items():

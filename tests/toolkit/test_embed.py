@@ -9,6 +9,7 @@ import pytest
 import yaml
 
 import guidecfg
+import region
 from conftest import FRONT_PAGE, OWNERSHIP, commit_all, host_git, make_embedded_guide
 
 TOOLKIT = Path(__file__).resolve().parents[2] / "guide" / "toolkit"
@@ -202,6 +203,13 @@ def test_apply_dirty_check_ignores_guide_subdirectory(host_guide):
     # a section named twice, or nested in another one, would be moved twice
     ([{"path": "../README.md", "section": "Building from source", "destination": "developer"},
       {"path": "../README.md", "section": "Requirements", "destination": "developer"}], "overlaps"),
+    # author-region is for sections of the root Markdown README only (specs/006)
+    ([{"path": "../USAGE.md", "section": "Install", "destination": "author-region"}], "author-region"),
+    ([{"path": "../README.md", "destination": "author-region"}], "name a section"),
+    ([{"path": "../README.md", "section": "Install", "destination": "author-region", "stub": True}], "stub"),
+    # a moved section nested in a retained one would eat the author's text
+    ([{"path": "../README.md", "section": "Building from source", "destination": "author-region"},
+      {"path": "../README.md", "section": "Requirements", "destination": "developer"}], "overlaps"),
 ])
 def test_apply_refuses_bad_plans(host_guide, entries, message):
     root, head = host_guide
@@ -236,6 +244,7 @@ def test_apply_non_markdown_readme(host_guide):
         [{"path": "../README.rst", "destination": "input"}],                      # two root READMEs
         [{"path": "../README.rst", "section": "Install", "destination": "developer"}],
         [{"path": "../README.rst", "destination": "keep"}],
+        [{"path": "../README.rst", "section": "Install", "destination": "author-region"}],
     ]
     for entries in bad:
         proc = embed(root, "apply", "--plan", str(write_plan(root, head, entries)))
@@ -273,6 +282,68 @@ def test_apply_registers_kept_doc_as_path_input(host_guide):
     assert proc.returncode == 0, proc.stdout + proc.stderr
     item = guidecfg.load_inputs(root).inputs[0]
     assert item.location == "../docs/install.md" and len(item.sha256) == 64 and not item.revision
+
+
+# --- move-plan destination author-region (specs/006 T019, T022) -----------------------
+
+
+REGION_ENTRIES = [
+    {"path": "../README.md", "section": None, "destination": "input"},
+    {"path": "../README.md", "section": "Usage", "destination": "author-region"},
+    {"path": "../README.md", "section": "Building from source", "destination": "developer"},
+    {"path": "../README.md", "section": "Running tests", "destination": "developer"},
+]
+
+
+def test_apply_accepts_author_region_for_front_readme_sections(host_guide):
+    root, head = host_guide
+    host = root.parent
+    before = snapshot(host)
+    plan = write_plan(root, head, REGION_ENTRIES)
+    before[plan.relative_to(host).as_posix()] = plan.read_bytes()
+    proc = embed(root, "apply", "--dry-run", "--plan", str(plan))
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "author region" in proc.stdout
+    assert snapshot(host) == before
+
+
+def test_apply_keeps_landing_sections_as_author_region(host_guide):
+    root, head = host_guide
+    host = root.parent
+    usage, install = readme_section(host, "Usage"), readme_section(host, "Install")
+    proc = embed(root, "apply", "--plan", str(write_plan(root, head, REGION_ENTRIES)))
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    text = (host / "README.md").read_text()
+    assert usage in text and install in text            # retained text byte-identical
+    parsed = region.parse(text)
+    assert parsed.marked and parsed.content == ""
+    assert text.index(install) < text.index(usage) < text.index(region.MARKER_BEGIN)
+    assert "## Building from source" not in text and "## Running tests" not in text
+    assert "Building from source" in (host / "DEVELOPMENT.md").read_text()
+    item = guidecfg.load_inputs(root).inputs[0]         # the README is input at the revision
+    assert item.location == "self:README.md" and item.revision == head
+    # the front page task fills the region; the author text keeps every byte
+    filled = region.splice(text, OWNERSHIP + "\n\n# Mini Host\n")
+    assert filled.startswith(text[:text.index(region.MARKER_BEGIN)])
+    assert region.MARKER_BEGIN + "\n" + OWNERSHIP in filled and usage in filled
+
+
+def test_apply_author_region_markers_below_last_retained_section(host_guide):
+    root, head = host_guide
+    host = root.parent
+    install = readme_section(host, "Install")
+    proc = embed(root, "apply", "--plan", str(write_plan(root, head, [
+        {"path": "../README.md", "section": None, "destination": "input"},
+        {"path": "../README.md", "section": "Install", "destination": "author-region"},
+        {"path": "../README.md", "section": "Building from source", "destination": "developer"},
+        {"path": "../README.md", "section": "Running tests", "destination": "developer"},
+    ])))
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    text = (host / "README.md").read_text()
+    begin, end = text.index(region.MARKER_BEGIN), text.index(region.MARKER_END)
+    assert text.index(install) < begin                  # markers below the retained section
+    assert text.index("## Usage") > end                 # unclassified text stays the author's
+    assert "## Building from source" not in text
 
 
 # --- stage (T019) ----------------------------------------------------------------------
@@ -460,6 +531,97 @@ def test_front_page_status_ignores_region_rewrites(recorded):
     assert attrs.regions(recorded, guidecfg.load_baseline(recorded), write=True)
     proc = embed(recorded, "front-page-status")
     assert proc.returncode == 0, proc.stdout
+
+
+# --- author-owned region on the front page (specs/006, T012) ---------------------------
+
+BEGIN = "<!-- guide:region -->"
+END = "<!-- /guide:region -->"
+AUTHOR_NOTE = "A hand-written pitch that stays."
+
+REGION_PAGE = (
+    "<!-- The pitch below is the author's; the guide owns the marked region. -->\n"
+    "# My project\n\n"
+    + AUTHOR_NOTE + "\n"
+    "\n"
+    + BEGIN + "\n"
+    + FRONT_PAGE + "\nPinned at <!-- guide:attr self-commit-short -->0000000<!-- /guide:attr -->.\n"
+    + END + "\n"
+    "\n"
+    "Trailing author text.\n"
+)
+
+
+@pytest.fixture
+def recorded_region(mini_host):
+    """An embedded guide whose front page carries the marker pair, recorded."""
+    host, commit = mini_host
+    root = make_embedded_guide(host, commit, front_page=REGION_PAGE)
+    proc = embed(root, "front-page-status", "--record")
+    assert proc.returncode == 0, proc.stderr
+    return root
+
+
+def test_author_edit_above_markers_is_invisible(recorded_region):
+    front = recorded_region.parent / "README.md"
+    front.write_text(front.read_text().replace(AUTHOR_NOTE, "A hand-written pitch, now edited."))
+    front.write_text(front.read_text().replace("Trailing author text.", "Trailing author text, edited."))
+    proc = embed(recorded_region, "front-page-status")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert proc.stdout.strip() == "unchanged"
+
+
+def test_region_edit_reports_edited_with_region_only_diff(recorded_region):
+    front = recorded_region.parent / "README.md"
+    front.write_text(front.read_text().replace("Mini Host prints a greeting.",
+                                               "Mini Host prints a warm greeting."))
+    proc = embed(recorded_region, "front-page-status")
+    assert proc.returncode == 10
+    assert proc.stdout.splitlines()[0] == "edited"
+    assert "-Mini Host prints a greeting." in proc.stdout
+    assert "+Mini Host prints a warm greeting." in proc.stdout
+    # author text never appears in the diff
+    assert AUTHOR_NOTE not in proc.stdout and "Trailing author text" not in proc.stdout
+
+
+def test_unmarked_front_page_keeps_whole_file_behavior(mini_host):
+    """FR-002: without markers, an edit anywhere in the file is a hand edit."""
+    host, commit = mini_host
+    root = make_embedded_guide(host, commit, front_page=FRONT_PAGE)
+    assert embed(root, "front-page-status", "--record").returncode == 0
+    front = host / "README.md"
+    front.write_text(front.read_text().replace("# Mini Host", "# Mini Host, edited"))
+    proc = embed(root, "front-page-status")
+    assert proc.returncode == 10 and proc.stdout.splitlines()[0] == "edited"
+
+
+def test_marker_transition_reports_edited_once_then_settles(mini_host):
+    host, commit = mini_host
+    root = make_embedded_guide(host, commit, front_page=FRONT_PAGE)
+    assert embed(root, "front-page-status", "--record").returncode == 0
+    front = host / "README.md"
+    # the author adds markers, keeping a pitch above them and moving the title
+    # and badges into their own text
+    text = front.read_text()
+    ownership = text.splitlines()[0]
+    lines = text.splitlines(keepends=True)
+    idx = next(i for i, l in enumerate(lines) if l.startswith("<!-- Sources:"))
+    front.write_text("A hand-written pitch.\n\n" + BEGIN + "\n" + ownership + "\n"
+                     + "".join(lines[idx:]) + END + "\n")
+    proc = embed(root, "front-page-status")
+    assert proc.returncode == 10 and proc.stdout.splitlines()[0] == "edited"
+    assert embed(root, "front-page-status", "--record").returncode == 0
+    proc = embed(root, "front-page-status")
+    assert proc.returncode == 0 and proc.stdout.strip() == "unchanged"
+
+
+def test_stage_keeps_the_whole_front_page(recorded_region):
+    """FR-015: site and PDF exports print the whole front page, author text included."""
+    proc = embed(recorded_region, "stage", "--out", "build/stage")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    staged = (recorded_region / "build" / "stage" / "docs" / "README.md").read_text()
+    assert AUTHOR_NOTE in staged and "Trailing author text." in staged
+    assert BEGIN in staged and END in staged and OWNERSHIP in staged
 
 
 # --- stubs (T039) ----------------------------------------------------------------------

@@ -178,3 +178,49 @@ def test_self_links_use_the_tracked_branch(emb, mini_host):
     v = attrs.values(guidecfg.load_baseline(emb))
     assert "self-blob" not in v and "self-tree" not in v and "self-repo" not in v
     assert v["self-commit"] == mini_host[1]
+
+
+# --- author-owned region on the front page (specs/006, T013) --------------------------
+
+BEGIN = "<!-- guide:region -->"
+END = "<!-- /guide:region -->"
+
+
+@pytest.fixture
+def emb_region(mini_host):
+    """An embedded guide whose front page carries the marker pair; the region holds a
+    stale attr region, the author text holds an attr marker of its own."""
+    host, commit = mini_host
+    front = (
+        "# My project\n\n"
+        "A pitch with a marker the guide must not touch: "
+        "<!-- guide:attr not-a-baseline-attr -->keep me<!-- /guide:attr -->.\n"
+        "\n"
+        + BEGIN + "\n"
+        + FRONT_PAGE + "\nPinned at <!-- guide:attr self-commit-short -->0000000<!-- /guide:attr -->.\n"
+        + END + "\n"
+    )
+    return make_embedded_guide(host, commit, front_page=front)
+
+
+def test_regions_rewrite_the_front_page_region_only(emb_region, mini_host):
+    commit = mini_host[1]
+    baseline = guidecfg.load_baseline(emb_region)
+    front = emb_region.parent / "README.md"
+    before = front.read_text()
+    changes = attrs.regions(emb_region, baseline, write=True)
+    assert [c.name for c in changes] == ["self-commit-short"]
+    after = front.read_text()
+    assert "keep me" in after and "not-a-baseline-attr" in after  # author marker untouched
+    assert after.startswith("# My project\n\nA pitch with a marker")
+    assert f"-->{commit[:7]}<!--" in after
+    # everything outside the region is byte-identical
+    assert after.split(BEGIN)[0] == before.split(BEGIN)[0]
+    assert after.split(END)[1] == before.split(END)[1]
+
+
+def test_author_attr_marker_is_no_unknown_attribute_error(emb_region):
+    baseline = guidecfg.load_baseline(emb_region)
+    # check mode must not raise on the author marker and must report only the region
+    changes = attrs.regions(emb_region, baseline, write=False)
+    assert [c.name for c in changes] == ["self-commit-short"]

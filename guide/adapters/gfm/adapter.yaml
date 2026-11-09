@@ -47,6 +47,17 @@ experimental:
 #   <!-- guide:attr <name> -->VALUE<!-- /guide:attr -->
 attributes: generated-region
 
+# Author-owned README region (specs/006, gfm only): a guide.yaml block
+#   publish:
+#     page: docs/intro.md     # the page to render (inside docs/)
+#     target: ../README.md    # the author's file (outside the guide root)
+# publishes the rendered page (links rebased to the target's location) between the
+# author's markers, everything outside them staying the author's byte for byte:
+#   <!-- guide:region -->
+#   guide-owned content, written by `make publish`, compared by `make check-publish`
+#   <!-- /guide:region -->
+# A guide without the block ignores the publish targets (no-op, exit 0).
+
 preview_port: 8642
 
 # Branding keys this adapter supports (specs/002-antora-branding/data-model.md, adapter

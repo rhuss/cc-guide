@@ -6,7 +6,7 @@
 """Load and validate a guide project's configuration files.
 
   guide.yaml     project configuration (format, personas, sections, internal part,
-                 optional Antora branding block)
+                 optional Antora branding block, optional gfm publish block)
   baseline.yaml  pinned sources and change requests
   inputs.yaml    input register (references only, never raw content)
 
@@ -122,6 +122,15 @@ class Embedded:
 
 
 @dataclass
+class Publish:
+    """The guide.yaml `publish` block (specs/006, FR-006): render `page` into the
+    guide-owned region of `target`. Both paths are resolved against the guide root;
+    gfm guides only, one block per guide in v1."""
+    page: Path      # the source page, inside the content root
+    target: Path    # the author-owned README, outside the content root
+
+
+@dataclass
 class Guide:
     root: Path
     schema: int
@@ -144,6 +153,8 @@ class Guide:
     branding: dict | None = None
     # The `embedded` block (None for a guide in its own repository).
     embedded: Embedded | None = None
+    # The `publish` block (None when the guide publishes no README region).
+    publish: Publish | None = None
 
     @property
     def slug(self) -> str:
@@ -474,8 +485,9 @@ class _Checker:
 # --- loaders ----------------------------------------------------------------
 
 GUIDE_KEYS = {"schema", "title", "format", "personas", "sections", "rigor", "internal",
-              "clusters", "validate", "drift", "upstream", "branding", "embedded"}
+              "clusters", "validate", "drift", "upstream", "branding", "embedded", "publish"}
 EMBEDDED_KEYS = {"front_page", "developer_readme", "stubs", "pr_check"}
+PUBLISH_KEYS = {"page", "target"}
 
 
 def load_adapter(root: Path, required: bool = True) -> Adapter | None:
@@ -580,6 +592,9 @@ def load_guide(root: Path) -> Guide:
     embedded = None
     if "embedded" in data:
         embedded = _load_embedded(c, root, data.get("embedded"), fmt, internal_enabled, terms, patterns)
+    publish = None
+    if "publish" in data:
+        publish = _load_publish(c, root, data.get("publish"), fmt)
 
     c.raise_if_any()
     # confidential.local.yaml belongs to embedded guides only; a separate guide keeps its
@@ -589,7 +604,7 @@ def load_guide(root: Path) -> Guide:
                  sections=sections, rigor=rigor, internal_enabled=internal_enabled,
                  confidential_terms=terms + local_terms, confidential_patterns=patterns + local_patterns,
                  clusters=clusters, extra_queries=extra, drift_schedule=schedule, upstream_target=target,
-                 branding=brand, embedded=embedded)
+                 branding=brand, embedded=embedded, publish=publish)
 
 
 def _load_embedded(c: _Checker, root: Path, value: Any, fmt: Any, internal_enabled: bool,
@@ -640,6 +655,33 @@ def _load_embedded(c: _Checker, root: Path, value: Any, fmt: Any, internal_enabl
     if front is None:
         return None
     return Embedded(front_page=front, developer_readme=dev, stubs=stubs, pr_check=pr == "on")
+
+
+def _load_publish(c: _Checker, root: Path, value: Any, fmt: Any) -> Publish | None:
+    """Parse and check the `publish` block (FR-006, data-model.md).
+
+    Both keys are required, non-empty guide-root-relative paths; `page` must resolve
+    inside the content root, `target` outside it; gfm guides only. Page existence is
+    checked by validate (a load must not fail on a page create has not written yet).
+    """
+    raw = c.mapping(value, "publish", PUBLISH_KEYS, PUBLISH_KEYS)
+    if fmt is not None and fmt != "gfm":
+        c.add("publish", f"publishing a README region requires the gfm format (got {fmt!r})")
+    adapter = load_adapter(root, required=False)
+    content = adapter.content_root if adapter is not None else ("docs" if fmt == "gfm" else "content")
+    paths: dict[str, Path] = {}
+    for key, rel in (("page", raw.get("page")), ("target", raw.get("target"))):
+        if not isinstance(rel, str) or not rel:
+            c.add(f"publish.{key}", "must be a path relative to the guide root")
+            continue
+        paths[key] = _norm(root, rel).resolve()
+    if "page" in paths and not _inside(paths["page"], root / content):
+        c.add("publish.page", f"{raw.get('page')} must lie inside the content root {content}/")
+    if "target" in paths and _inside(paths["target"], root / content):
+        c.add("publish.target", f"{raw.get('target')} must lie outside the content root {content}/")
+    if len(paths) != 2:
+        return None
+    return Publish(page=paths["page"], target=paths["target"])
 
 
 def _load_local_raw(root: Path) -> tuple[dict, _Checker]:
@@ -950,6 +992,9 @@ def validate(root: Path, allow_missing_front_page: bool = False) -> tuple[list[s
                 and not result.embedded.front_page.is_file():
             rel = os.path.relpath(result.embedded.front_page, Path(root))
             problems.append(f"guide.yaml:embedded.front_page: {rel} not found")
+        if isinstance(result, Guide) and result.publish is not None and not result.publish.page.is_file():
+            rel = os.path.relpath(result.publish.page, Path(root))
+            problems.append(f"guide.yaml:publish.page: {rel} not found")
     brand_problems, warnings = branding.check_guide(root)
     problems.extend(line for line in brand_problems if line not in problems)
     return problems, warnings

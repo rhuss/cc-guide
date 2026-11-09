@@ -641,3 +641,85 @@ def test_discover_empty_directory_means_a_new_separate_guide(tmp_path):
     with pytest.raises(guidecfg.DiscoverError) as err:
         guidecfg.discover(target)
     assert err.value.code == 4
+
+
+# --- publish block (specs/006-author-owned-front-page-region) -----------------------
+
+
+def make_gfm_guide(root: Path) -> Path:
+    """A minimal standalone gfm guide with one docs page and a baseline."""
+    vendor_adapter(root, "gfm")
+    (root / "guide.yaml").write_text(yaml.safe_dump({
+        "schema": 1, "title": "Pub Guide", "format": "gfm",
+        "personas": [{"id": "admin", "title": "Administrator", "start": "docs/intro"}],
+        "sections": [{"id": "overview", "title": "Overview", "voice": "concepts"}],
+    }, sort_keys=False))
+    (root / "docs").mkdir(exist_ok=True)
+    (root / "docs" / "intro.md").write_text("# Intro\n")
+    (root / "baseline.yaml").write_text(yaml.safe_dump(
+        {"captured": "2026-11-09", "sources": [{"id": "mini", "repo": "example/mini",
+                                                "commit": "a" * 40}]}, sort_keys=False))
+    return root
+
+
+def set_publish(root: Path, **values) -> None:
+    edit(root / "guide.yaml", lambda d: d.update(publish=values))
+
+
+def test_publish_block_loads(tmp_guide):
+    root = make_gfm_guide(tmp_guide)
+    set_publish(root, page="docs/intro.md", target="../README.md")
+    guide = guidecfg.load_guide(root)
+    assert guide.publish is not None
+    assert guide.publish.page == (root / "docs" / "intro.md").resolve()
+    assert guide.publish.target == (root.parent / "README.md").resolve()
+    problems, _ = guidecfg.validate(root)
+    assert problems == [], problems
+
+
+def test_guide_without_publish_block_loads_as_before(tmp_guide):
+    root = make_gfm_guide(tmp_guide)
+    assert guidecfg.load_guide(root).publish is None
+    assert guidecfg.validate(root) == ([], [])
+
+
+@pytest.mark.parametrize("values, key", [
+    ({"page": "docs/intro.md"}, "publish.target"),            # missing key
+    ({"target": "../README.md"}, "publish.page"),             # missing key
+    ({"page": "", "target": "../README.md"}, "publish.page"),  # empty value
+    ({"page": "docs/intro.md", "target": "../README.md", "style": "fancy"}, "publish.style"),
+])
+def test_publish_block_rejects_bad_keys(tmp_guide, values, key):
+    root = make_gfm_guide(tmp_guide)
+    set_publish(root, **values)
+    assert key in config_error(guidecfg.load_guide, root)
+
+
+def test_publish_page_must_stay_inside_the_content_root(tmp_guide):
+    root = make_gfm_guide(tmp_guide)
+    set_publish(root, page="README.md", target="../README.md")
+    assert "publish.page" in config_error(guidecfg.load_guide, root)
+
+
+def test_publish_target_must_leave_the_content_root(tmp_guide):
+    root = make_gfm_guide(tmp_guide)
+    set_publish(root, page="docs/intro.md", target="docs/README.md")
+    assert "publish.target" in config_error(guidecfg.load_guide, root)
+
+
+@pytest.mark.parametrize("fmt", ["antora", "mkdocs"])
+def test_publish_requires_the_gfm_format(tmp_guide, fmt):
+    root = make_gfm_guide(tmp_guide)
+    vendor_adapter(root, fmt)
+    edit(root / "guide.yaml", lambda d: d.update(format=fmt))
+    set_publish(root, page="docs/intro.md", target="../README.md")
+    assert "gfm" in config_error(guidecfg.load_guide, root)
+
+
+def test_publish_page_existence_checked_by_validate_only(tmp_guide):
+    root = make_gfm_guide(tmp_guide)
+    set_publish(root, page="docs/gone.md", target="../README.md")
+    assert guidecfg.load_guide(root).publish is not None   # load stays tolerant
+    problems, _ = guidecfg.validate(root)
+    assert "guide.yaml:publish.page: docs/gone.md not found" in problems, problems
+

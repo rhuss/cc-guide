@@ -43,6 +43,7 @@ from typing import Callable
 import yaml
 
 import guidecfg
+import region
 import sources as sources_mod
 
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
@@ -215,7 +216,6 @@ def _resolve_in_bare(bare: Path, ref: str) -> str | None:
 # --- the `self` source (embedded guides) ----------------------------------------
 
 SELF = guidecfg.SELF_ID
-REGION_RE = re.compile(r"(<!--\s*guide:attr\s+[^\s>]+\s*-->).*?(<!--\s*/guide:attr\s*-->)", re.S)
 
 
 def host_toplevel(root: Path) -> Path:
@@ -302,8 +302,11 @@ def self_fingerprints(root: Path, top: Path, commit: str) -> dict[str, str]:
 
 
 def normalized_front_page(text: str) -> str:
-    """Front page text with the values of generated regions removed (make regions rewrites them)."""
-    return REGION_RE.sub(r"\1\2", text)
+    """The comparison key of a front page (specs/006, research R5): the region content
+    with the values of generated regions removed (make regions rewrites them), so author
+    text outside the markers is invisible to hand-edit detection. The whole file when
+    it carries no markers (FR-002)."""
+    return region.normalized(text)
 
 
 def store_front_page_blob(root: Path, top: Path) -> str:

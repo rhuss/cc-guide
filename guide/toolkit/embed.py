@@ -41,6 +41,7 @@ import yaml
 
 import fetch
 import guidecfg
+import region
 
 README_RE = re.compile(r"^README(\.[A-Za-z0-9]+)?$", re.I)
 COMMUNITY_RE = re.compile(r"^(CONTRIBUTING|CODE_OF_CONDUCT|SECURITY|SUPPORT|GOVERNANCE|FUNDING)(\.[A-Za-z0-9]+)?$", re.I)
@@ -59,7 +60,7 @@ INLINE_LINK_RE = re.compile(r"(?<!!)\[([^\]]*)\]\(\s*<?([^)\s>]+)>?(?:\s+\"[^\"]
 # Reference definitions; footnote definitions (`[^1]: text`) are not links.
 REFDEF_RE = re.compile(r"^(\s{0,3}\[(?!\^)[^\]]+\]:\s*<?)(\S+?)(>?(?:\s.*)?)$")
 SCHEME_RE = re.compile(r"^[a-z][a-z0-9+.-]*:", re.I)
-DESTINATIONS = ("input", "developer", "keep", "remove", "relocate")
+DESTINATIONS = ("input", "developer", "author-region", "keep", "remove", "relocate")
 MOVED_HEADING = "Moved from the README"
 STUB_MARKER = "<!-- guide: moved -->"
 
@@ -546,6 +547,7 @@ def check_plan(root: Path, plan: Plan) -> tuple[Host, list[dict]]:
         raise Refused("the host repository has uncommitted changes outside the guide subdirectory; "
                       "commit or set them aside first:\n  " + "\n  ".join(dirty))
     inv = inventory(root, plan.revision)
+    front_host = host.front_host()
     problems: list[str] = []
     entries: list[dict] = []
     by_path: dict[str, list[dict]] = {}
@@ -570,11 +572,21 @@ def check_plan(root: Path, plan: Plan) -> tuple[Host, list[dict]]:
         if dest not in DESTINATIONS:
             problems.append(f"{where}: destination must be one of {', '.join(DESTINATIONS)} (got {dest!r})")
             continue
-        if entry["stub"] and dest in ("relocate", "keep"):
+        if entry["stub"] and dest in ("relocate", "keep", "author-region"):
             problems.append(f"{where}: stub: true cannot be combined with destination {dest}; a stub "
                             f"replaces a removed path, and {hp} stays in the host"
                             + (f" (at {entry['to']})" if dest == "relocate" and entry["to"] else ""))
             continue
+        if dest == "author-region":
+            # specs/006, contracts/move-plan-destination.md: a section of the root Markdown
+            # README stays in place as author-owned text above the guide region
+            if hp != front_host or posixpath.splitext(hp)[1].lower() not in (".md", ".markdown"):
+                problems.append(f"{where}: author-region keeps a section of the root Markdown README "
+                                f"({front_host}) as author text; it cannot apply to {hp}")
+                continue
+            if entry["section"] is None:
+                problems.append(f"{where}: author-region entries name a section of {hp}")
+                continue
         name = posixpath.basename(hp)
         if (dest == "remove" or entry["stub"] or dest == "relocate") and LICENSE_RE.match(name):
             problems.append(f"{where}: {hp} is a license file; it stays where GitHub detects it (FR-022)")
@@ -619,8 +631,9 @@ def check_plan(root: Path, plan: Plan) -> tuple[Host, list[dict]]:
                 problems.append(f"{where}: cannot relocate to a root README")
                 continue
         if entry["section"] is not None:
-            if dest not in ("developer", "input", "keep"):
-                problems.append(f"{where}: a section can only go to the developer README or be input")
+            if dest not in ("developer", "input", "keep", "author-region"):
+                problems.append(f"{where}: a section can only go to the developer README, stay in the "
+                                "author region, or be input")
                 continue
             text = _show(host, plan.revision, hp) or ""
             span = section_span(text, str(entry["section"]))
@@ -642,7 +655,6 @@ def check_plan(root: Path, plan: Plan) -> tuple[Host, list[dict]]:
             continue
         entries.append(entry)
         by_path.setdefault(hp, []).append(entry)
-    front_host = host.front_host()
     root_readmes = [e["path"] for e in inv["files"] if e["kind"] == "readme"]
     for hp in root_readmes:
         by_path.setdefault(hp, [])
@@ -651,10 +663,21 @@ def check_plan(root: Path, plan: Plan) -> tuple[Host, list[dict]]:
             continue
         dests = {e["destination"] for e in items}
         if hp == front_host:
-            bad = dests - {"input", "developer"}
+            bad = dests - {"input", "developer", "author-region"}
             if bad:
-                problems.append(f"{hp}: the root README is replaced by the front page; its only destinations "
-                                f"are input and developer sections (got {', '.join(sorted(bad))})")
+                problems.append(f"{hp}: the root README becomes the front page; its sections become guide "
+                                f"input, move to the developer README, or stay in the author region "
+                                f"(got {', '.join(sorted(bad))})")
+            if "author-region" in dests:
+                # apply removes the input/developer sections and keeps the author-region ones
+                # byte-identical: no two section entries of this README may overlap
+                spans = sorted((e["span"][0], e["span"][1], str(e["section"]))
+                               for e in items if e.get("span"))
+                for (s1, e1, t1), (s2, _, t2) in zip(spans, spans[1:]):
+                    if s2 < e1:
+                        problems.append(f"{hp}: section {t2!r} overlaps section {t1!r} (name only the "
+                                        "outer one, or give the sections different destinations)")
+                        break
         else:
             bad = dests - {"input", "remove", "relocate"}
             if bad or not dests & {"remove", "relocate"}:
@@ -708,9 +731,10 @@ def apply(root: Path, plan_path: Path, dry_run: bool = False) -> list[str]:
     host, entries = check_plan(root, plan)
     ops: list[str] = []
     today = _dt.date.today().isoformat()
+    front_host = host.front_host()
     gone = {e["path"] for e in entries if e["stub"] or e["destination"] in ("remove", "relocate")}
-    # development sections move out of files that stay (the root README is replaced by the
-    # front page as a whole, so it is left as it is until then)
+    # development sections move out of files that stay (without author-region entries the root
+    # README is replaced by the front page as a whole, so it is left as it is until then)
     trimmed: dict[str, str] = {}
     for e in entries:
         hp = e["path"]
@@ -722,7 +746,40 @@ def apply(root: Path, plan_path: Path, dry_run: bool = False) -> list[str]:
             section, _ = found
             body = section if section in text else section.rstrip("\n")
             trimmed[hp] = text.replace(body, "", 1)
-    rewritten = {e["path"] for e in entries if _is_root_readme(e["path"])} | gone | set(trimmed)
+    # specs/006, research R9: with author-region entries the front README survives; its moved
+    # (input/developer) sections leave it, the retained landing text stays byte-identical, and
+    # the empty guide region lands immediately below the last retained section
+    region_text: str | None = None
+    if any(e["destination"] == "author-region" for e in entries):
+        text = _show(host, plan.revision, front_host) or ""
+        moved = sorted((e for e in entries if e["path"] == front_host
+                        and e["destination"] in ("input", "developer") and e.get("span")),
+                       key=lambda e: e["span"][0], reverse=True)
+        for e in moved:
+            found = extract_section(text, str(e["section"]))
+            if found is None:   # check_plan refuses overlapping sections; never trim blindly
+                raise Refused(f"section {e['section']!r} of {front_host} not found while moving it")
+            section, _ = found
+            body = section if section in text else section.rstrip("\n")
+            text = text.replace(body, "", 1)
+        last = 0
+        for e in entries:
+            if e["path"] == front_host and e["destination"] == "author-region":
+                span = section_span(text, str(e["section"]))
+                if span is None:
+                    raise Refused(f"section {e['section']!r} of {front_host} not found while keeping it")
+                last = max(last, span[1])
+        lines = text.splitlines(keepends=True)
+        head = "".join(lines[:last])
+        if head and not head.endswith("\n"):
+            head += "\n"
+        tail = "".join(lines[last:])
+        region_text = (head + "\n" + region.MARKER_BEGIN + "\n" + region.MARKER_END + "\n"
+                       + (("\n" + tail) if tail.strip() else ""))
+        ops.append(f"keep the landing sections of {front_host} as the author region "
+                   "(markers below the retained text)")
+    rewritten = ({e["path"] for e in entries if _is_root_readme(e["path"])} | gone | set(trimmed)
+                 | ({front_host} if region_text is not None else set()))
 
     # inputs: recorded at the revision when consolidation rewrites or removes the file (FR-020);
     # a directory registers each of its documentation files
@@ -772,7 +829,6 @@ def apply(root: Path, plan_path: Path, dry_run: bool = False) -> list[str]:
     # stubs, relocations, removals
     stubs: list[str] = []
     stub_texts: dict[str, str] = {}
-    front_host = host.front_host()
     for e in entries:
         hp = e["path"]
         if e["stub"]:
@@ -805,6 +861,8 @@ def apply(root: Path, plan_path: Path, dry_run: bool = False) -> list[str]:
         register_inputs(root, inputs)
     for hp, text in trimmed.items():
         (host.top / hp).write_text(text)
+    if region_text is not None:
+        (host.top / front_host).write_text(region_text)
     if dev_text is not None:
         (host.top / dev_host).parent.mkdir(parents=True, exist_ok=True)
         (host.top / dev_host).write_text(dev_text)

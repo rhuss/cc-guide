@@ -41,6 +41,11 @@ NO_SOURCES_MD = re.compile(r"^<!--\s*guide:\s*no-sources\s*-->$")
 FRONT_PAGE_MARK = "<!-- guide: front page."
 OWNERSHIP_COMMENT = ("<!-- guide: front page. This file is generated and maintained by cc-guide; "
                      "change it with /guide:evolve. -->")
+# The first line of the region of a front page that carries the guide:region markers
+# (specs/006, FR-011): same prefix, so FRONT_PAGE_MARK recognizes both.
+OWNERSHIP_COMMENT_REGION = ("<!-- guide: front page. The text between the guide:region markers is "
+                            "generated and maintained by cc-guide; change it with /guide:evolve. "
+                            "Text outside the markers belongs to the author. -->")
 # Badge and logo lines a front page keeps between its title and its source block:
 # Markdown images (optionally linked) or HTML image, link, picture, and paragraph tags.
 _MD_IMAGE = r"\[?!\[[^\]]*\]\([^)]*\)(?:\]\([^)]*\))?"

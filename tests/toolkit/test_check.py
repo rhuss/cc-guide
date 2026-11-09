@@ -870,3 +870,157 @@ def test_missing_stub_fails(emb):
     path.unlink()
     found = [v for v in echeck(emb) if v.rule == "moved-stub"]
     assert len(found) == 1 and "not found" in found[0].message
+
+
+# --- publish target (specs/006, story 1) -------------------------------------------------
+
+
+GFM_ADAPTER = """format: gfm
+content_root: docs
+internal_root: docs/internal
+page_glob: "**/*.md"
+comment: html
+"""
+
+PUBLISH_README = (
+    "# Host Project\n\n"
+    "Author text with a [resolving link](sample-guide/docs/intro.md).\n"
+    "\n"
+    "<!-- guide:region -->\n"
+    "Guide-owned content with its own [page](sample-guide/docs/intro.md).\n"
+    "<!-- /guide:region -->\n"
+    "\n"
+    "Trailing author text.\n"
+)
+
+
+@pytest.fixture
+def gfm_publish(render_fixture_guide):
+    root = render_fixture_guide
+    write(root, "tools/guide/adapter.yaml", GFM_ADAPTER)
+    path = root / "guide.yaml"
+    data = yaml.safe_load(path.read_text())
+    data["format"] = "gfm"
+    data["publish"] = {"page": "docs/intro.md", "target": "../README.md"}
+    path.write_text(yaml.safe_dump(data, sort_keys=False))
+    write(root, "docs/intro.md", "# Intro\n\n<!-- Sources:\nmini:Makefile\n-->\n\nBody text.\n")
+    write(root, "../README.md", PUBLISH_README)
+    return root
+
+
+def pcheck(root):
+    return [v for v in run(root) if v.path == "../README.md"]
+
+
+def test_publish_target_clean_passes(gfm_publish):
+    assert pcheck(gfm_publish) == []
+
+
+def test_unresolvable_author_link_in_target_fails(gfm_publish):
+    """FR-008: the whole-file link check covers author links into the guide."""
+    front = gfm_publish.parent / "README.md"
+    front.write_text(front.read_text().replace(
+        "Trailing author text.", "Trailing author text with a [broken link](gone.md)."))
+    found = pcheck(gfm_publish)
+    assert rules(found) == ["broken-link"]
+    assert "gone.md" in found[0].message and found[0].line == 9
+
+
+def test_unresolvable_region_link_in_target_fails(gfm_publish):
+    front = gfm_publish.parent / "README.md"
+    front.write_text(front.read_text().replace(
+        "its own [page](sample-guide/docs/intro.md).", "its own [page](sample-guide/docs/gone.md)."))
+    found = pcheck(gfm_publish)
+    assert rules(found) == ["broken-link"]
+
+
+@pytest.mark.parametrize("readme, rule", [
+    ("# Host\n\n<!-- guide:region -->\nNo end marker.\n", "region-unbalanced"),
+    ("# Host\n\n<!-- guide:region -->\nA\n<!-- /guide:region -->\n\n<!-- guide:region -->\nB\n<!-- /guide:region -->\n",
+     "region-duplicate"),
+])
+def test_region_validity_errors_for_target(gfm_publish, readme, rule):
+    (gfm_publish.parent / "README.md").write_text(readme)
+    found = pcheck(gfm_publish)
+    assert rules(found) == [rule]
+
+
+def test_missing_publish_target_fails(gfm_publish):
+    (gfm_publish.parent / "README.md").unlink()
+    found = pcheck(gfm_publish)
+    assert rules(found) == ["publish-target"] and "not found" in found[0].message
+
+
+# --- embedded mode: the author-owned region (specs/006, T012/T015) ----------------------
+
+import sources  # noqa: E402
+
+REGION_OWNERSHIP = sources.OWNERSHIP_COMMENT_REGION
+BEGIN = "<!-- guide:region -->"
+END = "<!-- /guide:region -->"
+
+
+def region_front(author: str, region: str) -> str:
+    return author + "\n" + BEGIN + "\n" + region + END + "\n"
+
+
+def good_region() -> str:
+    return FRONT_PAGE.replace(OWNERSHIP, REGION_OWNERSHIP)
+
+
+def test_marked_front_page_author_text_is_not_checked(emb):
+    """FR-003/FR-013: typed values, dashes, and confidential terms in author text
+    never fail the check; the region passes as a whole."""
+    short = guidecfg.load_baseline(emb).source("self").commit[:7]
+    (emb / "confidential.local.yaml").write_text("confidential_terms: [Greeting Corp]\n")
+    set_front(emb, region_front(f"Author pitch, typed {short}, dash {EM}, for Greeting Corp.\n",
+                                good_region()))
+    warnings = []
+    assert echeck(emb, structure=True, warnings=warnings) == []
+    assert warnings == []
+
+
+def test_marked_front_page_region_rules_report_file_lines(emb):
+    short = guidecfg.load_baseline(emb).source("self").commit[:7]
+    region = good_region().replace("Mini Host prints a greeting.", f"Mini Host prints, typed {short}.")
+    text = region_front("Author pitch.\n", region)
+    set_front(emb, text)
+    found = [v for v in echeck(emb) if v.rule == "typed-value"]
+    assert len(found) == 1
+    lines = text.splitlines()
+    expected = lines.index(BEGIN) + 1 + next(
+        i for i, l in enumerate(region.splitlines()) if "typed" in l) + 1
+    assert found[0].line == expected
+
+
+def test_marked_front_page_dash_scopes_to_the_region(emb):
+    set_front(emb, region_front(f"Author pitch with a dash {EM}.\n", good_region()))
+    assert all(v.rule != "dash" for v in echeck(emb))
+    set_front(emb, region_front("Author pitch.\n", good_region().replace(
+        "Mini Host prints a greeting.", f"Mini Host prints a greeting {EM}.")))
+    found = [v for v in echeck(emb) if v.rule == "dash"]
+    assert len(found) == 1 and found[0].path == "../README.md"
+
+
+def test_marked_front_page_link_check_reads_the_whole_file(emb):
+    """FR-008: an unresolvable author link fails; region links are checked too."""
+    set_front(emb, region_front("Author pitch with a [broken link](gone.md).\n", good_region()))
+    found = [v for v in echeck(emb) if v.rule == "broken-link"]
+    assert len(found) == 1 and "gone.md" in found[0].message
+    set_front(emb, region_front("Author pitch.\n", good_region().replace(
+        "[Install](guide/docs/admin/install.md)", "[Install](guide/docs/gone.md)")))
+    found = [v for v in echeck(emb) if v.rule == "broken-link"]
+    assert len(found) == 1 and "gone.md" in found[0].message
+
+
+def test_marked_front_page_needs_the_region_ownership_comment(emb):
+    """FR-011: inside markers the comment must state the region ownership."""
+    set_front(emb, region_front("Author pitch.\n", FRONT_PAGE))
+    found = [v for v in echeck(emb) if v.rule == "front-page"]
+    assert len(found) == 1 and sources.OWNERSHIP_COMMENT_REGION in found[0].message
+
+
+def test_marked_front_page_malformed_markers_reported(emb):
+    set_front(emb, "Author pitch.\n\n" + BEGIN + "\n" + good_region())
+    found = [v for v in echeck(emb) if v.rule == "region-unbalanced"]
+    assert len(found) == 1 and found[0].path == "../README.md"

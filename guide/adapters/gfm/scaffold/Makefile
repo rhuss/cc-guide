@@ -18,6 +18,10 @@ VIEW ?= shareable
 PORT ?= 8642
 # make preview opens the browser once the server answers; OPEN=0 only serves
 # (the preview skill opens it itself).
+# Author-owned README region (specs/006): a guide.yaml `publish` block renders a page
+# into the target file between <!-- guide:region --> markers; `make publish` writes the
+# region, `make check` (via check-publish) compares it, and author text outside the
+# markers is never touched.
 OPEN ?= 1
 OPEN_LATER = if [ "$(OPEN)" != 0 ]; then ( for i in $$(seq 1 60); do \
 		if curl -fsS -o /dev/null http://127.0.0.1:$(PORT)/ 2>/dev/null; then \
@@ -38,7 +42,7 @@ STAGE = front=$$($(GET) embedded.front_page) || exit 1; docs=docs; \
 REGION_DIRS = dirs=docs; if [ -d internal ]; then dirs="docs internal"; fi; \
 	front=$$($(GET) embedded.front_page 2>/dev/null); if [ -n "$$front" ]; then dirs="$$dirs $$front"; fi
 
-.PHONY: help doctor fetch-baseline regions site site-internal check preview pdf print-pdf dist drift clean
+.PHONY: help doctor fetch-baseline regions site site-internal check check-publish publish preview pdf print-pdf dist drift clean
 
 help:
 	@echo "Guide targets (GitHub Markdown adapter):"
@@ -48,6 +52,8 @@ help:
 	@echo "  make site            regions, then render docs/ into build/site (pandoc)"
 	@echo "  make site-internal   render docs/ and internal/ into build/site-internal"
 	@echo "  make check           builds, page and content checks, leak check (STRICT=1 adds the claim ledger)"
+	@echo "  make publish         write the guide page into the author-owned README region (publish block)"
+	@echo "  make check-publish   compare the README region with the page (runs within check)"
 	@echo "  make preview         serve the Markdown with live reload (VIEW=internal for internal/, PORT=$(PORT))"
 	@echo "  make pdf             one PDF of the guide (VIEW=internal for the internal view)"
 	@echo "  make dist            check, then the PDF(s) and the shareable tarball (and the internal ones when enabled)"
@@ -82,8 +88,20 @@ check: fetch-baseline site site-internal
 	@$(REGION_DIRS); \
 	$(UV) run --quiet $(TOOLS)/attrs.py regions $$dirs
 	STRICT=$(STRICT) $(UV) run --quiet $(TOOLS)/check.py
+	@$(MAKE) --no-print-directory check-publish
 	@if [ "$(STRICT)" = 1 ]; then $(UV) run --quiet $(TOOLS)/ledger.py; fi
 	$(UV) run --quiet $(TOOLS)/leakcheck.py build/site
+
+# Writes the rendered publish page between the author's region markers; a no-op
+# notice (exit 0) when guide.yaml has no publish block. Depends on regions so the
+# page's guide:attr values are current before it is copied into the README.
+publish: regions
+	$(UV) run --quiet $(TOOLS)/publish.py --write
+
+# Compares the region with the rendered page; exit 1 on a difference or a
+# missing/malformed marker pair.
+check-publish:
+	$(UV) run --quiet $(TOOLS)/publish.py --check
 
 preview:
 	@# The internal view serves the project root, so internal pages can link to docs/.
