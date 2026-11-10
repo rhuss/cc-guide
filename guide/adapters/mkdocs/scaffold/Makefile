@@ -16,8 +16,8 @@ MKDOCS := $(UVX) --quiet --with-requirements requirements.txt mkdocs
 
 GET = $(UV) run --quiet $(TOOLS)/guidecfg.py get
 # The PDF file for a view (shareable or internal), as the shell variable out.
-PDF_OUT = slug=$$($(GET) slug) && date=$$($(GET) baseline.captured) || exit 1; \
-	if [ "$(1)" = internal ]; then out=dist/$$slug-$$date-INTERNAL.pdf; else out=dist/$$slug-$$date.pdf; fi
+PDF_OUT = slug=$$($(GET) slug) || exit 1; \
+	if [ "$(1)" = internal ]; then out=dist/$$slug-INTERNAL.pdf; else out=dist/$$slug.pdf; fi
 # The print-site page: one section per navigation group (h1 without id) holding one
 # section per page (h1); the site chrome is removed before printing.
 PRINT_ARGS = --page-heading 'section.print-page[id]:not(.md-section) > h1' \
