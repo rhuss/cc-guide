@@ -2,6 +2,7 @@
 name: evolve
 description: Evolve a source-verified guide after its sources changed (a guide in its own repository, or a guide embedded in the repository it documents, whose README is the front page). Reports drift against the recorded baseline (check-only mode needs no AI and no superpowers), re-evaluates documented change requests, registers new inputs, updates only the affected pages through superpowers with the same per-page reviews as create, and writes the new baseline last, after the checks pass. Also adopts guides that were not created by cc-guide. Use for /guide:evolve.
 argument-hint: "[--check] [--adopt] [--to ID=REF]... [--input PATH]... [--rigor fast|standard|strict] [--dir PATH]"
+user-invocable: false
 allowed-tools: ["Bash", "Read", "Write", "Edit", "Glob", "Grep", "Skill", "Agent", "AskUserQuestion"]
 ---
 

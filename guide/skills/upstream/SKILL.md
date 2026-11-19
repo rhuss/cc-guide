@@ -2,6 +2,7 @@
 name: upstream
 description: Report problems found in a guide's sources back to their owners. Re-verifies every collected finding against the current default branch, merges duplicates, shows existing upstream reports, drafts each issue with a provenance note, sanitizes it for public repositories, shows every draft in full, and files only what the author approves; optionally prepares a change proposal from a fork for mechanical documentation fixes. Use for /guide:upstream.
 argument-hint: "[--finding UF-N]... [--pr] [--dir PATH]"
+user-invocable: false
 allowed-tools: ["Bash", "Read", "Write", "Edit", "AskUserQuestion"]
 ---
 

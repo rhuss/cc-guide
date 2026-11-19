@@ -2,6 +2,7 @@
 name: preview
 description: Build a guide with its output adapter and serve it locally with live reload, then open it in the browser; shareable or internal view. Works during a create or evolve run and from a linked git worktree. Use for /guide:preview.
 argument-hint: "[--internal] [--port N] [--dir PATH]"
+user-invocable: false
 allowed-tools: ["Bash", "Read"]
 ---
 

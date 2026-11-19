@@ -2,6 +2,7 @@
 name: diagrams
 description: Draw, check, export, and review Excalidraw diagrams for a cc-guide guide project. Used by create and evolve for every diagram task. Covers canvas identification, the server's file paths, backup, clearing and restore, layout and curved-arrow rules, the claims file with a source for every label, arrow, and frame, the drawer's screenshot self-check, the overlap and claims gates (diagram_check.py), versioned export rounds, the controller's layout and fact review at native resolution, the two-round cap with manual hand-off, permissions, and the placeholder path when the Excalidraw tools are missing.
 argument-hint: "<diagram-name> [--round N]"
+user-invocable: false
 allowed-tools: ["Bash", "Read", "Write", "Edit", "mcp__excalidraw__*"]
 ---
 

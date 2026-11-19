@@ -2,6 +2,7 @@
 name: validate
 description: Validate a guide's recipes against a live cluster, opt-in. The read-only tier runs only commands positively identified as queries and compares each result with the expectation documented next to it; the full tier runs install and onboarding recipes end to end, only on a connection marked disposable, with confirmation before every mutating command. Output is redacted before it is recorded; mismatches become review findings. Use for /guide:validate.
 argument-hint: "--cluster NAME [--tier read-only|full] [--page PATH]... [--dir PATH]"
+user-invocable: false
 allowed-tools: ["Bash", "Read", "Write", "AskUserQuestion"]
 ---
 

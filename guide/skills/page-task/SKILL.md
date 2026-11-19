@@ -1,6 +1,7 @@
 ---
 name: page-task
 description: Templates and controller rules that the guide create and evolve skills hand to superpowers subagent-driven-development dispatches (page procedure, review guide, global constraints, final review addendum, built-in style rules). Used by the create and evolve skills; not invoked directly by authors.
+user-invocable: false
 allowed-tools: ["Bash", "Read", "Write"]
 ---
 

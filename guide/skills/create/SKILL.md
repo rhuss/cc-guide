@@ -2,6 +2,7 @@
 name: create
 description: Create a source-verified, persona-split guide from source repositories, transcripts, tickets, links, and notes. Interviews the author, scaffolds the guide project with an output adapter (Antora, MkDocs Material, or GitHub Markdown) in its own repository or embedded in the repository it documents (the README becomes the guide's front page), pins the sources, then drives superpowers brainstorming, writing-plans, and subagent-driven development with per-page reviews against the pinned sources, a final whole-guide review, and a run summary. Resumes an interrupted run. Use for /guide:create.
 argument-hint: "[--dir PATH] [--embedded] [--format antora|mkdocs|gfm] [--rigor fast|standard|strict] [--source ID=REPO[@REF]]... [--input PATH]... [--restart] [description]"
+user-invocable: false
 allowed-tools: ["Bash", "Read", "Write", "Edit", "Glob", "Grep", "Skill", "Agent", "AskUserQuestion", "WebFetch"]
 ---
 

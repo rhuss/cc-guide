@@ -2,6 +2,7 @@
 name: preflight
 description: Shared preflight for every /guide command. Resolves the guide project, detects the active harness and the companion capabilities (superpowers, cc-prose, Excalidraw MCP, parallel subagents) from in-session exposure, checks the adapter tool chain, and states the recommended session settings. Invoked by the guide command wrappers (and self-invoked by the skills on harnesses with no command layer) before the command's own skill; stops before any file is written when a requirement fails.
 argument-hint: "<command> [--dir PATH] [--check] [--format antora|mkdocs|gfm]"
+user-invocable: false
 allowed-tools: ["Bash", "Read"]
 ---
 

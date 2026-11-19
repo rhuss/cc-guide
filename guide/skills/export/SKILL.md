@@ -2,6 +2,7 @@
 name: export
 description: Export the whole guide as one PDF in navigation order, with a title page stating the baseline, a linked table of contents, page numbers, print-quality diagrams, and working cross-references. Shareable by default and leak-checked; the internal part only on explicit request, then marked on every page. Fails without writing a file when checks fail or the tool chain is missing. Use for /guide:export.
 argument-hint: "[--internal] [--out PATH] [--dir PATH]"
+user-invocable: false
 allowed-tools: ["Bash", "Read", "AskUserQuestion"]
 ---
 
