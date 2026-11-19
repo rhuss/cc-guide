@@ -26,8 +26,10 @@ Usage: uv run tools/guide/guidecfg.py validate [--allow-missing-front-page] [--r
          the guide is not embedded)
        uv run tools/guide/guidecfg.py discover [--dir DIR]
          prints the guide root: DIR when it holds guide.yaml, otherwise the one
-         immediate subdirectory holding an embedded guide; exit 3 when there are
-         several (they are listed), exit 4 when there is none
+         guide project found in the shallowest of the directories up to three levels
+         below DIR (hidden, node_modules, build, dist, target, and symlinked
+         directories are skipped); exit 3 when several are equally shallow (they are
+         listed), exit 4 when there is none
 """
 from __future__ import annotations
 
@@ -394,33 +396,69 @@ def _inside(path: Path, base: Path) -> bool:
     return path == base or base in path.parents
 
 
-def discover(directory: Path) -> Path:
-    """The guide root for a command run in directory (FR-031).
+DISCOVER_MAX_DEPTH = 3
+DISCOVER_PRUNED = frozenset({"node_modules", "build", "dist", "target"})
 
-    directory itself when it holds guide.yaml, else the one immediate subdirectory whose
-    guide.yaml has an `embedded` block. Raises DiscoverError with code 3 (several) or 4 (none).
+
+def discover(directory: Path) -> Path:
+    """The guide root for a command run in directory (FR-031, amended by spec 007).
+
+    directory itself when it holds guide.yaml. Otherwise the directories below it are
+    searched level by level, from depth 1 up to DISCOVER_MAX_DEPTH, for guide projects
+    (a directory holding a regular file guide.yaml, embedded or standalone). Hidden
+    directories, the names in DISCOVER_PRUNED, directories reached through a symbolic
+    link, and unreadable directories are skipped, and nothing below a guide project is
+    searched. The shallowest depth with a guide project decides: one returns it, several
+    raise DiscoverError with code 3 (candidates sorted by resolved path), none up to the
+    maximum depth raises DiscoverError with code 4.
     """
     directory = Path(directory)
-    if (directory / "guide.yaml").is_file():
-        return directory
-    found = []
-    if directory.is_dir():
-        for sub in sorted(directory.iterdir()):
-            if sub.is_dir() and not sub.name.startswith(".") and (sub / "guide.yaml").is_file() \
-                    and _embedded_raw(sub) is not None:
-                found.append(sub)
-    if len(found) > 1:
-        raise DiscoverError(3, found)
-    if not found:
+    try:
+        if (directory / "guide.yaml").is_file():
+            return directory
+    except OSError:   # DIR itself cannot be entered: nothing to find
+        raise DiscoverError(4, []) from None
+    if not directory.is_dir():
         raise DiscoverError(4, [])
-    return found[0]
+    level = [directory]
+    for _depth in range(DISCOVER_MAX_DEPTH):
+        found: list[Path] = []
+        nxt: list[Path] = []
+        for parent in level:
+            subdirs: list[Path] = []
+            try:
+                with os.scandir(parent) as entries:
+                    for entry in entries:
+                        if entry.name.startswith(".") or entry.name in DISCOVER_PRUNED:
+                            continue
+                        try:
+                            if entry.is_dir(follow_symlinks=False):
+                                subdirs.append(Path(entry.path))
+                        except OSError:   # one entry that cannot be inspected does not hide its siblings
+                            continue
+            except OSError:   # parent cannot be listed (or the listing broke off): keep what was read
+                pass
+            for sub in subdirs:
+                if not os.access(sub, os.R_OK | os.X_OK):   # unreadable directories are skipped (FR-007)
+                    continue
+                try:
+                    holds_guide = (sub / "guide.yaml").is_file()
+                except OSError:
+                    continue
+                (found if holds_guide else nxt).append(sub)
+        if len(found) == 1:
+            return found[0]
+        if found:
+            raise DiscoverError(3, sorted(found, key=lambda p: str(p.resolve())))
+        level = nxt
+    raise DiscoverError(4, [])
 
 
 class DiscoverError(Exception):
     def __init__(self, code: int, candidates: list[Path]):
         self.code = code
         self.candidates = candidates
-        super().__init__("several embedded guides" if code == 3 else "no guide project found")
+        super().__init__("several guide projects" if code == 3 else "no guide project found")
 
 
 class _Checker:
@@ -1037,11 +1075,12 @@ def main(argv: list[str] | None = None) -> int:
             print(discover(args.dir).resolve())
         except DiscoverError as err:
             if err.code == 3:
-                print("several embedded guides found; name one with --dir:", file=sys.stderr)
-                for cand in err.candidates:
+                print("several guide projects found; name one with --dir:", file=sys.stderr)
+                for cand in err.candidates:   # already sorted by resolved path in discover()
                     print(cand.resolve())
             else:
-                print(f"no guide project in {args.dir} or its immediate subdirectories", file=sys.stderr)
+                print(f"no guide project in {args.dir} or the directories below it "
+                      f"(up to {DISCOVER_MAX_DEPTH} levels)", file=sys.stderr)
             return err.code
         return 0
     if args.cmd == "get":

@@ -19,7 +19,7 @@ Paths and conventions are those of the create skill (`PLUGIN`, `GUIDE`, `WS`). `
 | `--to ID=REF` | Repeatable; target revision per source (default: each source's tracked branch head) |
 | `--input PATH_OR_URL` | Repeatable; new inputs to register |
 | `--rigor fast\|standard\|strict` | Default from `guide.yaml` |
-| `--dir PATH` | Guide project; default the current directory (from the root of a repository with an embedded guide, the guide subdirectory is found automatically) |
+| `--dir PATH` | Guide project; default the current directory (a guide project up to three levels below the current directory, embedded or standalone, is found automatically) |
 
 ## 1. Preflight
 
@@ -27,7 +27,7 @@ The `/guide:evolve` command runs `guide:preflight` first. When its result line i
 
 ## 2. Check-only mode (`--check`)
 
-Preflight resolved `GUIDE` with `guidecfg.py discover`, so `--check` works from the root of a repository with an embedded guide. Run `make drift` (it runs `uv run tools/guide/drift.py --check`). Show the report and interpret the exit status: 0 no drift, 10 drift found (list the affected pages and suggest `/guide:evolve`), anything else an error (show it). Change nothing, commit nothing, and stop here. The scheduled workflow (`.github/workflows/guide-drift.yml`) runs the same check without Claude Code.
+Preflight resolved `GUIDE` with `guidecfg.py discover`, so `--check` works from the root of a repository whose guide project sits up to three levels below it (embedded or standalone). Run `make drift` (it runs `uv run tools/guide/drift.py --check`). Show the report and interpret the exit status: 0 no drift, 10 drift found (list the affected pages and suggest `/guide:evolve`), anything else an error (show it). Change nothing, commit nothing, and stop here. The scheduled workflow (`.github/workflows/guide-drift.yml`) runs the same check without Claude Code.
 
 ## 3. Adoption (`--adopt`, FR-028)
 
@@ -83,7 +83,7 @@ For a guide that has no cc-guide `baseline.yaml` or no source blocks. Regular ev
 
 An embedded guide lives in a subdirectory of the repository it documents; the host README is its front page and the host repository is the source `self`. Everything above applies, with these additions:
 
-- **Resolve the guide** with `uv run "$PLUGIN/toolkit/guidecfg.py" discover --dir <dir>` (preflight does this): from the host root it finds the one embedded guide subdirectory. Several: ask which. None: stop and ask for the guide directory.
+- **Resolve the guide** with `uv run "$PLUGIN/toolkit/guidecfg.py" discover --dir "<dir>"` (preflight does this): from the host root it finds the one guide project in the directories below it (up to three levels). Several equally close: ask which. None: stop and ask for the guide directory.
 - **Reading sources**: read every source in the directory printed by `uv run tools/guide/fetch.py where <id>`; for `self` it is a snapshot of the host at the pinned commit, outside the repository. Never read the host's working tree as a source.
 - **Drift for `self`** uses fingerprints (`mode: fingerprint` in the report): only cited host files count, so commits that change only guide files are never drift, and squash merges never cause a `pin-missing`. `self:` inputs are reported as `recorded` (read at a revision; never changed or unreadable).
 - **Hand edits** (FR-009a, specs/006 FR-010): before planning, run `uv run tools/guide/embed.py front-page-status`. Exit 10 (`edited`) prints a diff of the front page's guide-owned region against the blob recorded at the last baseline: show it to the author as hand edits and ask whether to keep them (they become part of the front page task's input and are verified like any statement) or replace them. Never overwrite them silently. When the front page carries the `guide:region` markers, author text outside them is never compared, reported, or rewritten: only the region is diffed and only the region is rewritten. A marker transition (the author added or moved the markers since the last record) reports `edited` once, because the recorded blob covers the old whole file or the old region; after the front page task rewrites the region, record again and it settles.

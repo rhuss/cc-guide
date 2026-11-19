@@ -6,7 +6,7 @@ All scripts run with `uv run tools/guide/<script>` from the guide root or with `
 
 | Command | Behavior |
 |---|---|
-| `discover [--dir DIR]` | Print the guide root. `DIR` (default `.`) when it holds `guide.yaml`; otherwise the single immediate subdirectory whose `guide.yaml` has an `embedded` block. Exit 3 and list candidates when several match; exit 4 when none matches. |
+| `discover [--dir DIR]` | Print the guide root. `DIR` (default `.`) when it holds `guide.yaml`; otherwise search the directories below `DIR` level by level, depth 1 to 3, for a directory holding a regular file `guide.yaml` (embedded or standalone), skipping hidden directories, `node_modules`, `build`, `dist`, `target`, symlinked and unreadable directories, and everything below a found guide. The shallowest depth with a candidate decides: one candidate is printed (exit 0); several exit 3 (stderr `several guide projects found; name one with --dir:`, stdout the candidates as resolved absolute paths, sorted, one per line; deeper candidates are not listed); none up to depth 3 exits 4 (stderr `no guide project in DIR or the directories below it (up to 3 levels)`). Amended by spec 007-nested-guide-discovery (specs/007-nested-guide-discovery/contracts/discover-cli.md). |
 | `validate [--allow-missing-front-page]` | As today, plus the `embedded` rules (data-model.md). The flag lets create validate before the front page is written. |
 | `get embedded.front_page` (and other `embedded.*` keys) | Print the value, empty when not embedded. |
 

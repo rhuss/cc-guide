@@ -13,7 +13,7 @@ Run this before any other step of a `/guide:*` command. It writes no files. When
 ## Paths
 
 - `PLUGIN`: the plugin root, two directories above this skill's base directory (`<base>/../..`). Scripts live in `$PLUGIN/scripts/`, the toolkit in `$PLUGIN/toolkit/`, adapters in `$PLUGIN/adapters/`.
-- `GUIDE`: the guide project, resolved in step 1 (`--dir PATH` when given, otherwise the current directory, or the embedded guide in one of its immediate subdirectories). Always an absolute path. Never `cd` into `.guide/cache/`.
+- `GUIDE`: the guide project, resolved in step 1 (`--dir PATH` when given, otherwise the current directory, or the one guide project, embedded or standalone, found up to three levels below it). Always an absolute path. Never `cd` into `.guide/cache/`.
 - `SESSION`: the directory this session was started in (the primary working directory in your environment information), resolved to an absolute path. On Claude Code the session's permissions are read from its `.claude/settings*.json` (at its git toplevel inside a repository) and from `~/.claude/settings.json`, not from the guide project's settings when the two differ. Other harnesses manage permissions differently and read no `.claude/settings*.json`.
 
 ## Steps
@@ -28,12 +28,12 @@ uv run "$PLUGIN/toolkit/guidecfg.py" discover --dir "$DIR"
 
 | Exit | Meaning | Action |
 |---|---|---|
-| 0 | It printed the guide root: `DIR` itself (it holds `guide.yaml`), or the one immediate subdirectory holding an embedded guide (a `guide.yaml` with an `embedded` block, for example `guide/` when you run from the root of the repository it documents) | Set `GUIDE` to the printed path. `embedded` is `yes` when its `guide.yaml` has an `embedded` block (`uv run "$PLUGIN/toolkit/guidecfg.py" get embedded.front_page --root "$GUIDE"` prints a path), else `no`. |
-| 3 | Several immediate subdirectories hold an embedded guide (it lists them) | Stop and ask which one to use: "Several embedded guides found: <list>. Run the command again with --dir <one of them>." |
-| 4 | No guide project in `DIR` or its immediate subdirectories | `GUIDE` is `DIR`. For `create` this is a new guide (the create skill decides between a separate and an embedded guide); for every other command except `evolve --adopt`, stop as below. |
+| 0 | It printed the guide root: `DIR` itself (it holds `guide.yaml`), or the one guide project found in the shallowest of the directories up to three levels below `DIR` (a directory holding `guide.yaml`, embedded or standalone, for example `guide/` or `docs/guide/` when you run from the root of the repository it documents). Hidden, `node_modules`, `build`, `dist`, `target`, and symlinked directories are skipped, and nothing below a guide project is searched. | Set `GUIDE` to the printed path. `embedded` is `yes` when its `guide.yaml` has an `embedded` block (`uv run "$PLUGIN/toolkit/guidecfg.py" get embedded.front_page --root "$GUIDE"` prints a path), else `no`, wherever discovery found it. When that `get` exits non-zero (the configuration is invalid), `embedded` is `yes` when `guide.yaml` parses as YAML with a top-level `embedded` key and `no` otherwise (also when it is not valid YAML); leave the error to the command's own validation. Use the printed path as one value, quoted, in later commands; it is exactly one line. |
+| 3 | Several guide projects are equally close below `DIR` (it lists them; deeper ones are not listed) | Stop and ask which one to use: "Several guide projects found: <list>. Run the command again with --dir <one of them>." |
+| 4 | No guide project in `DIR` or the directories below it (up to three levels) | `GUIDE` is `DIR`. For `create` this is a new guide (the create skill decides between a separate and an embedded guide); for every other command except `evolve --adopt`, stop as below. |
 
 - For every command except `create` and `evolve --adopt`: `$GUIDE/guide.yaml` must exist. If it does not, stop:
-  > No guide project at `<GUIDE>` or in its immediate subdirectories (guide.yaml not found). Run `/guide:create` to start one, or pass `--dir` with the guide project path.
+  > No guide project at `<GUIDE>` or in the directories below it, up to three levels (guide.yaml not found). Run `/guide:create` to start one, or pass `--dir` with the guide project path.
 
   When the directory already holds a guide that cc-guide did not create (a `baseline.yaml`, an Antora `antora.yml`, a `mkdocs.yml`, or a `docs/` directory), add: "To bring an existing guide under cc-guide, run `/guide:evolve --adopt`."
 - For `evolve --adopt`: `guide.yaml` may be missing; the adoption step writes it.

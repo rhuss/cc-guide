@@ -48,10 +48,10 @@ When `GUIDE/guide.yaml` exists:
 
 ## 3. Target directory (FR-005b, FR-001, FR-031)
 
-Run `uv run "$PLUGIN/toolkit/guidecfg.py" discover --dir <target>` first (target: `--dir PATH` or the current directory).
+Run `uv run "$PLUGIN/toolkit/guidecfg.py" discover --dir "<target>"` first (target: `--dir PATH` or the current directory).
 
-- Exit 0 and the printed directory holds `guide.yaml`: an existing guide project (in its own repository or embedded in a host). Resume it as in section 2 with `GUIDE` set to the printed directory.
-- Exit 3 (several embedded guides in the immediate subdirectories): list them and ask which one to use (`--dir`). Write nothing.
+- Exit 0 and the printed directory holds `guide.yaml`: an existing guide project (the target itself, or a guide found up to three levels below it, embedded or standalone, for example `docs/guide/`). Resume it as in section 2 with `GUIDE` set to the printed directory. An author who wants a second, new guide next to it passes `--dir`.
+- Exit 3 (several guide projects equally close below the target): list them and ask which one to use (`--dir`). Write nothing.
 - Exit 4 (no guide project), then by target:
   - **Empty directory** (ignoring `.DS_Store`), or a `--dir PATH` that does not exist yet (create it): a guide in its own repository. This is the flow below; never offer embedded mode here.
   - **The root of an existing git repository** (`git -C <target> rev-parse --show-toplevel` prints the target itself) that is not a guide project: offer embedded mode (recommended): "This is the root of an existing repository. cc-guide can embed the guide in a subdirectory here and make the README the guide's front page (gfm only). Embed the guide here?" `--embedded` answers yes without asking. On yes, `HOST` is the target and the embedded steps below apply. On no, stop as for a non-empty directory.

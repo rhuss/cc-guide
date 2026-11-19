@@ -17,7 +17,7 @@ Applies to the page task that writes the front page and to its review. It extend
 ## create skill: embedded branch
 
 Inserted points (existing section numbers):
-- **§3 Target directory**: run `guidecfg.py discover`. One embedded guide found: resume it. None found and the target is the root of a git repository: offer embedded mode (and accept `--embedded`). Non-git non-empty directory: refuse as today. A subdirectory of a repository: refuse with the monorepo note.
+- **§3 Target directory**: run `guidecfg.py discover`. One guide project found (embedded or standalone, up to three levels below the target): resume it. Several equally close: ask which (`--dir`). (Amended by spec 007-nested-guide-discovery.) None found and the target is the root of a git repository: offer embedded mode (and accept `--embedded`). Non-git non-empty directory: refuse as today. A subdirectory of a repository: refuse with the monorepo note.
 - **Preconditions** (before intake): host working tree clean; when on the default branch, ask before committing there and offer a working branch.
 - **§4 Intake** (embedded): guide subdirectory name (default `guide`), developer README path (default `DEVELOPMENT.md`), PR check offer (default no), scheduled drift offer as today. Format fixed to gfm (explain when Antora or MkDocs is requested). No internal part (explain). No remote offer. Confidential terms go to `confidential.local.yaml`.
 - **§5 Setup** (embedded): no `git init`; `scaffold-project.sh --embedded`; pin `self` and the other sources; write `confidential.local.yaml` when needed; add host-root session files to `.git/info/exclude`.

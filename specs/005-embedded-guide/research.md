@@ -83,6 +83,7 @@ All decisions below come from reading the current toolkit, adapter, and skills (
 
 - **Decision**: `guidecfg.py discover [--dir DIR]` prints the guide root: `DIR` itself when it holds `guide.yaml`; otherwise the single immediate subdirectory whose `guide.yaml` has an `embedded` block; exit 3 with a list when there are several; exit 4 when there are none. Preflight uses it to resolve `GUIDE`.
 - **Rationale**: FR-031 needs one rule shared by every command.
+- **Amendment (spec 007-nested-guide-discovery)**: the second rule became a bounded search: directories up to three levels below `DIR`, embedded or standalone guides alike, the shallowest depth with a guide project wins (several at that depth exit 3), and hidden, `node_modules`, `build`, `dist`, `target`, and symlinked directories are pruned, as is everything below a found guide. Rationale: a standalone guide kept in a documentation subdirectory (for example `docs/guide/`) was never found from the repository root.
 
 ## R14. Scaffold
 

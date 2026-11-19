@@ -442,6 +442,13 @@ def discover(path: Path) -> subprocess.CompletedProcess:
                           capture_output=True, text=True)
 
 
+def make_guide(directory: Path) -> Path:
+    """A minimal guide configuration in directory (discovery only checks that guide.yaml exists)."""
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "guide.yaml").write_text("schema: 1\n")
+    return directory
+
+
 def test_discover_current_dir(embedded, render_fixture_guide):
     for root in (embedded, render_fixture_guide):
         proc = discover(root)
@@ -460,17 +467,260 @@ def test_discover_several_exits_3(embedded):
     shutil.copytree(embedded, embedded.parent / "guide2")
     proc = discover(embedded.parent)
     assert proc.returncode == 3
-    out = proc.stdout + proc.stderr
-    assert "guide2" in out and str(embedded.name) in out
+    assert proc.stdout.splitlines() == sorted(str(p.resolve()) for p in (embedded, embedded.parent / "guide2"))
+    assert "several guide projects" in proc.stderr
 
 
-def test_discover_none_exits_4(tmp_path, embedded):
-    assert discover(tmp_path / "nothing-here").returncode == 4
-    (tmp_path / "empty").mkdir()
-    assert discover(tmp_path / "empty").returncode == 4
-    # a subdirectory with a non-embedded guide.yaml is not an embedded guide
+def test_discover_nested_standalone_guide(tmp_path, render_fixture_guide):
+    """A standalone guide at docs/guide is found from the root and is not embedded (US1, FR-008)."""
+    root = tmp_path / "repo"
+    found = root / "docs" / "guide"
+    shutil.copytree(render_fixture_guide, found)
+    proc = discover(root)
+    assert proc.returncode == 0, proc.stderr
+    assert Path(proc.stdout.strip()) == found.resolve()
+    assert guidecfg.discover(root).resolve() == found.resolve()
+    proc = run_cli(found, "get", "embedded.front_page")
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stdout == "\n"
+
+
+def test_discover_depth_three(tmp_path):
+    root = tmp_path / "repo"
+    found = make_guide(root / "docs" / "user" / "guide")
+    proc = discover(root)
+    assert proc.returncode == 0, proc.stderr
+    assert Path(proc.stdout.strip()) == found.resolve()
+
+
+def test_discover_self_wins_over_nested(tmp_path):
+    root = make_guide(tmp_path / "repo")
+    make_guide(root / "docs" / "guide")
+    proc = discover(root)
+    assert proc.returncode == 0, proc.stderr
+    assert Path(proc.stdout.strip()) == root.resolve()
+    assert guidecfg.discover(root) == root
+
+
+def test_discover_shallower_wins(tmp_path):
+    root = tmp_path / "repo"
+    shallow = make_guide(root / "guide")
+    make_guide(root / "docs" / "guide")
+    proc = discover(root)
+    assert proc.returncode == 0, proc.stderr
+    assert Path(proc.stdout.strip()) == shallow.resolve()
+    assert guidecfg.discover(root) == shallow
+
+
+def test_discover_tie_exits_3_sorted(tmp_path):
+    """Equally shallow guides stop discovery; only they are listed, sorted (US2, FR-004)."""
+    root = tmp_path / "repo"
+    site = make_guide(root / "site" / "guide")
+    docs = make_guide(root / "docs" / "guide")
+    make_guide(root / "a" / "b" / "guide")   # deeper: never reported
+    proc = discover(root)
+    assert proc.returncode == 3
+    expected = sorted(str(p.resolve()) for p in (docs, site))
+    assert proc.stdout.splitlines() == expected
+    assert "several guide projects" in proc.stderr
+    with pytest.raises(guidecfg.DiscoverError) as err:
+        guidecfg.discover(root)
+    assert err.value.code == 3
+    assert [str(p.resolve()) for p in err.value.candidates] == expected
+
+
+def test_discover_standalone_immediate_subdirectory(embedded):
+    """A standalone guide in an immediate subdirectory is found now and is not embedded (US3, FR-003)."""
+    proc = run_cli(embedded, "get", "embedded.front_page")
+    assert proc.returncode == 0 and proc.stdout.strip() != ""   # the unmodified fixture is embedded
     edit(embedded / "guide.yaml", lambda d: d.pop("embedded"))
-    assert discover(embedded.parent).returncode == 4
+    proc = discover(embedded.parent)
+    assert proc.returncode == 0, proc.stderr
+    assert Path(proc.stdout.strip()) == embedded.resolve()
+    assert guidecfg.discover(embedded.parent).resolve() == embedded.resolve()
+    proc = run_cli(embedded, "get", "embedded.front_page")
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stdout == "\n"
+
+
+def test_discover_embedded_at_depth_two(tmp_path, embedded):
+    """An embedded guide deeper than depth 1 is found; its status comes from the configuration."""
+    root = tmp_path / "repo"
+    found = root / "docs" / "guide"
+    shutil.copytree(embedded, found)
+    proc = discover(root)
+    assert proc.returncode == 0, proc.stderr
+    assert Path(proc.stdout.strip()) == found.resolve()
+    # the embedded block travels with the configuration, wherever discovery found it (FR-008)
+    data = yaml.safe_load((found / "guide.yaml").read_text())
+    assert isinstance(data, dict) and "embedded" in data
+
+
+@pytest.mark.parametrize("inside", [".guide/cache/x", ".git/x", "node_modules/x", "build/x", "dist/x",
+                                    "target/x", "docs/node_modules/x"])
+def test_discover_pruned_inside(tmp_path, inside):
+    """A guide configuration only inside a pruned directory is never found (US4, FR-005)."""
+    root = tmp_path / "repo"
+    make_guide(root / inside)
+    proc = discover(root)
+    assert proc.returncode == 4, proc.stdout
+    assert proc.stdout == ""
+
+
+def test_discover_pruning_is_exact(tmp_path):
+    """Only the exact pruned names are skipped: Build and node_modules_old are searched."""
+    for name in ("Build", "node_modules_old"):
+        root = tmp_path / f"repo-{name}"
+        found = make_guide(root / name)
+        proc = discover(root)
+        assert proc.returncode == 0, proc.stderr
+        assert Path(proc.stdout.strip()) == found.resolve()
+
+
+def test_discover_pruned_dirs_are_not_candidates(tmp_path):
+    """Hidden, pruned-name, and symlinked directories are no candidates themselves (US4 AS2, AS4)."""
+    root = tmp_path / "repo"
+    make_guide(root / ".docs")
+    make_guide(root / "build")
+    (root / "shared").symlink_to(make_guide(tmp_path / "elsewhere" / "g"), target_is_directory=True)
+    proc = discover(root)
+    assert proc.returncode == 4, proc.stdout
+    # a symlinked directory is not entered either
+    other = tmp_path / "repo2"
+    other.mkdir()
+    make_guide(tmp_path / "outside" / "guide")
+    (other / "link").symlink_to(tmp_path / "outside", target_is_directory=True)
+    proc = discover(other)
+    assert proc.returncode == 4, proc.stdout
+
+
+def test_discover_not_below_a_guide(tmp_path):
+    """A guide's own nested configurations never compete with it (US4 AS3, FR-006)."""
+    root = tmp_path / "repo"
+    found = make_guide(root / "docs" / "guide")
+    make_guide(root / "docs" / "guide" / "examples")
+    proc = discover(root)
+    assert proc.returncode == 0, proc.stderr
+    assert Path(proc.stdout.strip()) == found.resolve()
+
+
+def test_discover_depth_four_not_found(tmp_path):
+    root = tmp_path / "repo"
+    make_guide(root / "a" / "b" / "c" / "guide")
+    proc = discover(root)
+    assert proc.returncode == 4
+    assert proc.stdout == ""
+    assert "or the directories below it (up to 3 levels)" in proc.stderr
+
+
+def test_discover_guide_yaml_entry_kinds(tmp_path):
+    """Only a regular file (or a symlink to one) named guide.yaml marks a candidate (FR-002)."""
+    as_dir = tmp_path / "dir-case"
+    (as_dir / "x" / "guide.yaml").mkdir(parents=True)
+    assert discover(as_dir).returncode == 4
+
+    as_link = tmp_path / "link-case"
+    (as_link / "y").mkdir(parents=True)
+    real = tmp_path / "real-guide.yaml"
+    real.write_text("schema: 1\n")
+    (as_link / "y" / "guide.yaml").symlink_to(real)
+    proc = discover(as_link)
+    assert proc.returncode == 0, proc.stderr
+    assert Path(proc.stdout.strip()) == (as_link / "y").resolve()
+
+    invalid = tmp_path / "invalid-case"
+    (invalid / "z").mkdir(parents=True)
+    (invalid / "z" / "guide.yaml").write_text("a: [")   # discovery does not parse the file
+    proc = discover(invalid)
+    assert proc.returncode == 0, proc.stderr
+    assert Path(proc.stdout.strip()) == (invalid / "z").resolve()
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root reads directories regardless of their mode")
+@pytest.mark.parametrize("mode", [0o000, 0o111])
+def test_discover_unreadable_directory_skipped(tmp_path, mode):
+    """A directory that cannot be read is skipped without failing the search (FR-007).
+
+    0o111 lets a lookup of guide.yaml succeed but forbids listing: such a directory is
+    still unreadable and must not shadow the readable guide deeper in the tree.
+    """
+    root = tmp_path / "repo"
+    found = make_guide(root / "docs" / "guide")
+    locked = make_guide(root / "locked")
+    locked.chmod(mode)
+    try:
+        proc = discover(root)
+        assert proc.returncode == 0, proc.stderr
+        assert Path(proc.stdout.strip()) == found.resolve()
+    finally:
+        locked.chmod(0o755)
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root reads directories regardless of their mode")
+def test_discover_unlistable_dir_exits_4(tmp_path):
+    """DIR that can be entered but not listed: no traceback, exit 4 (FR-007)."""
+    root = tmp_path / "repo"
+    make_guide(root / "docs" / "guide")
+    root.chmod(0o111)
+    try:
+        proc = discover(root)
+    finally:
+        root.chmod(0o755)
+    assert proc.returncode == 4, proc.stderr
+    assert proc.stdout == ""
+    assert "Traceback" not in proc.stderr
+
+
+def test_discover_does_not_list_pruned_trees(tmp_path, monkeypatch):
+    """A pruned tree is never listed, so pruned trees add no work (SC-004)."""
+    root = tmp_path / "repo"
+    found = make_guide(root / "docs" / "guide")
+    modules = root / "node_modules"
+    make_guide(modules / "pkg")   # readable: only name pruning keeps discovery out of it
+    listed: list[Path] = []
+    real_scandir = os.scandir
+
+    def recording_scandir(path):
+        listed.append(Path(path))
+        return real_scandir(path)
+
+    monkeypatch.setattr(guidecfg.os, "scandir", recording_scandir)
+    assert guidecfg.discover(root) == found
+    monkeypatch.undo()
+    assert listed, "discover lists directories with os.scandir"
+    assert not [p for p in listed if p == modules or modules in p.parents], listed
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root reads directories regardless of their mode")
+def test_discover_unreadable_pruned_tree_changes_nothing(tmp_path):
+    """With a node_modules tree that cannot be read, discovery succeeds as without it (SC-004).
+
+    This guards against a crash only; test_discover_does_not_list_pruned_trees shows that
+    name pruning is what keeps discovery out of the tree.
+    """
+    root = tmp_path / "repo"
+    found = make_guide(root / "docs" / "guide")
+    modules = root / "node_modules"
+    modules.mkdir()
+    modules.chmod(0o000)
+    try:
+        proc = discover(root)
+    finally:
+        modules.chmod(0o755)
+    assert proc.returncode == 0, proc.stderr
+    assert Path(proc.stdout.strip()) == found.resolve()
+
+
+def test_discover_none_exits_4(tmp_path):
+    for target in (tmp_path / "nothing-here", tmp_path / "empty", tmp_path / "a-file"):
+        if target.name == "empty":
+            target.mkdir()
+        elif target.name == "a-file":
+            target.write_text("x")
+        proc = discover(target)
+        assert proc.returncode == 4, proc.stderr
+        assert proc.stdout == ""
+        assert f"no guide project in {target}" in proc.stderr
 
 
 # --- confidential.local.yaml (FR-006, research R9) ------------------------------------

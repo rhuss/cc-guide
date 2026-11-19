@@ -118,3 +118,30 @@ Ideas captured from code reviews for future brainstorming.
 - **Summary**: cc-guide's OpenCode command shims invoke `guide:preflight` / `guide:<name>` skills by name, but `install.sh` only copies the shim files into `.opencode/plugins/guide/command/`; the cc-review reference instead resolves a `core/` directory and executes its files directly, never relying on skill-by-name resolution.
 
 > Whether OpenCode resolves cc-guide's skills from copied command files is unverified (OpenCode is the secondary, best-effort harness, and live verification is the open item in tests/manual/004-multi-harness.md). The discovery path itself (`.opencode/plugins/guide/command/` vs `.opencode/command/`) is also unconfirmed. If live OpenCode testing shows the skills do not resolve, the fix is to either register the plugin's skills with OpenCode in install.sh, or restructure the shims to resolve and run the skill bodies directly (a core-dir-style resolution like cc-review) rather than by name. Codex (primary) is unaffected: it discovers skills via the `.codex-plugin` manifest.
+
+### discovery-vendored-trees
+
+- **Source**: deep-review
+- **Date**: 2026-11-19
+- **Reference**: 007-nested-guide-discovery
+- **Summary**: Nested discovery prunes only hidden, node_modules, build, dist, and target, so a vendored dependency or submodule (`vendor/<org>/<pkg>`, `third_party/x`, a nested clone) that ships guide.yaml within three levels can be resolved as the guide project when no shallower guide exists.
+
+> Commands then run that directory's Makefile and tools. The pruned list is fixed by spec 007 (FR-005, Clarifications, Assumptions), so changing it needs a spec evolution: add `vendor` and `third_party`, skip directories holding a `.git` entry, or have preflight confirm a nested match before running scripts there.
+
+### discovery-from-home-directory
+
+- **Source**: deep-review
+- **Date**: 2026-11-19
+- **Reference**: 007-nested-guide-discovery
+- **Summary**: Running a guide command from `$HOME` or `/` walks three levels of private folders, which can trigger macOS privacy prompts and slow down on network or cloud-sync mounts.
+
+> A guard such as exit 4 for the home directory or filesystem root, or descending only inside a git work tree, would need a spec decision.
+
+### discovery-skipped-dirs-silent
+
+- **Source**: deep-review
+- **Date**: 2026-11-19
+- **Reference**: 007-nested-guide-discovery
+- **Summary**: Directories skipped as unreadable leave no trace in discovery's output, so a guide behind wrong permissions shows up as "no guide project".
+
+> A stderr line counting skipped directories would keep the stdout contract and give the author a hint.
