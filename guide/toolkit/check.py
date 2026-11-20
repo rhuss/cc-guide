@@ -17,6 +17,8 @@ carry the Red Hat Demo Platform notice unless `footer` is `rhdp` (FR-032, rule
 `branding`). With `theme: neutral`, every page of those views must also load
 css/theme-neutral.css and no Google Fonts stylesheet, and _/font/ must hold the
 vendored fonts and OFL.txt (specs/003-neutral-branding FR-026).
+Antora navigation files must have a blank line before every list title after the first
+line (rule `nav-format`); a list title that repeats the item right below it is a warning.
 For an embedded guide (specs/005-embedded-guide), the front page (the host README) is a
 page like any other and must start with the ownership comment; `self:` citations must
 not cite guide material (the guide subdirectory, the front page, the developer README,
@@ -339,6 +341,41 @@ def _md_fence_mask(lines: list[str]) -> list[bool]:
         else:
             mask.append(False)
     return mask
+
+
+NAV_TOP_ITEM_RE = re.compile(r"^\*\s+(?:xref:[^\[]*\[(?P<link>[^\]]*)\]|(?P<text>.+?))\s*$")
+
+
+def check_nav(root: Path, adapter: guidecfg.Adapter, warnings: list[str]) -> list[Violation]:
+    """Antora navigation files (rule nav-format).
+
+    A list title (`.Title`) after the first line needs a blank line before it: without
+    one, Asciidoctor reads it as text of the list item above, which breaks that item's
+    link (a violation). A list title that repeats the first top-level item under it shows
+    the same name twice in the sidebar; that is only a warning, so guides written before
+    this rule still pass after a toolkit refresh.
+    """
+    root = Path(root)
+    out: list[Violation] = []
+    files = sorted(root.glob(f"{adapter.content_root}/modules/*/nav.adoc")) + \
+        sorted(root.glob(f"{adapter.internal_root}/modules/*/nav.adoc"))
+    for f in files:
+        rel = _rel(f, root)
+        lines = f.read_text(errors="replace").splitlines()
+        for n, line in enumerate(lines):
+            if not BLOCK_TITLE_RE.match(line):
+                continue
+            title = line[1:].strip()
+            if n > 0 and lines[n - 1].strip():
+                out.append(Violation(rel, n + 1, "nav-format",
+                                     f"list title {title!r} needs a blank line before it; "
+                                     "without one it becomes text of the item above"))
+            following = next((x for x in lines[n + 1:] if x.strip()), "")
+            m = NAV_TOP_ITEM_RE.match(following)
+            if m and (m.group("link") or m.group("text") or "").strip() == title:
+                warnings.append(f"{rel}:{n + 1}: [nav-format] warning: list title {title!r} repeats the "
+                                "item below it; drop the title and keep the item as the section entry")
+    return out
 
 
 def check_structure(root: Path, guide: guidecfg.Guide, adapter: guidecfg.Adapter) -> list[Violation]:
@@ -884,6 +921,8 @@ def check_pages(root: Path, guide: guidecfg.Guide, baseline: guidecfg.Baseline,
     out.extend(check_embedded(root, guide, baseline))
     out.extend(check_publish(root, guide))
     out.extend(check_stubs(root, guide))
+    if adapter.format == "antora":
+        out.extend(check_nav(root, adapter, warnings))
     if adapter.format == "antora" and guide.branding is not None:
         out.extend(check_branded_site(root, guide))
         out.extend(check_neutral_theme(root, guide))

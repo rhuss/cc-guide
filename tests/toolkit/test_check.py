@@ -166,6 +166,61 @@ def test_no_sources_marker_passes(antora):
     assert run(antora) == []
 
 
+NAV = "content/modules/ROOT/nav.adoc"
+
+# The cc-rosa guide's first navigation: no blank line before the later list titles, so
+# Asciidoctor read ".User guide" as text of the item above, and each title repeats the
+# link to its own section page.
+GLUED_NAV = """.Overview
+* xref:index.adoc[Start here]
+* xref:overview/how-it-works.adoc[How it works]
+.User guide
+* xref:user/index.adoc[User guide]
+** xref:user/install.adoc[Install]
+.Reference
+* xref:reference/index.adoc[Reference]
+"""
+
+
+def nav_run(root: Path):
+    warnings: list[str] = []
+    found = check.check_pages(root, guidecfg.load_guide(root), guidecfg.load_baseline(root), warnings=warnings)
+    return found, warnings
+
+
+def test_nav_title_without_blank_line_and_repeated_title(antora):
+    write(antora, NAV, GLUED_NAV)
+    found, warnings = nav_run(antora)
+    assert [(v.path, v.line, v.rule) for v in found] == [(NAV, 4, "nav-format"), (NAV, 7, "nav-format")]
+    assert "blank line" in found[0].message
+    assert [w.split(": [")[0] for w in warnings] == [f"{NAV}:4", f"{NAV}:7"]
+    assert "'User guide' repeats" in warnings[0]
+
+
+def test_nav_repeated_title_after_blank_line_only_warns(antora):
+    write(antora, NAV, ".Overview\n* xref:index.adoc[Start here]\n\n.Admin guide\n* xref:admin/index.adoc[Admin guide]\n")
+    found, warnings = nav_run(antora)
+    assert found == []
+    assert len(warnings) == 1 and "[nav-format] warning" in warnings[0]
+
+
+def test_nav_title_after_blank_line_passes(antora):
+    write(antora, NAV, ".Overview\n* xref:index.adoc[Start here]\n\n.Admin guide\n* xref:admin/install.adoc[Install]\n")
+    assert nav_run(antora) == ([], [])
+
+
+def test_nav_single_list_with_text_parent_passes(antora):
+    write(antora, NAV, "* Overview\n** xref:index.adoc[Start here]\n* xref:user/index.adoc[User guide]\n"
+                       "** xref:user/install.adoc[Install]\n")
+    assert run(antora) == []
+
+
+def test_nav_internal_part_is_checked(antora):
+    write(antora, "internal/modules/internal/nav.adoc", ".Internal\n* xref:a.adoc[A]\n.Notes\n* xref:b.adoc[B]\n")
+    assert [(v.path, v.line, v.rule) for v in run(antora)] == [
+        ("internal/modules/internal/nav.adoc", 3, "nav-format")]
+
+
 def test_stub_only_fails_under_strict(antora):
     write(antora, f"{PAGES}/stub.adoc", "= Stub\n// STUB\n\n// Sources:\n// mini:Makefile\n\nLater.\n")
     assert run(antora) == []

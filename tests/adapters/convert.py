@@ -281,14 +281,18 @@ def render_antora(page: Page, internal_paths: set[str], cr_sources: dict[str, st
 
 
 def antora_nav(sections: list[dict], titles: dict[str, str], internal: bool) -> str:
+    """One list in the scaffold's shape: a section is a top-level item, linked to its
+    first page when that page carries the section title, plain text otherwise."""
     out = []
     for sec in sections:
-        out.append(f".{sec['title']}")
-        for p in sec["pages"]:
-            target = posixpath.basename(p) if internal else p
-            out.append(f"* xref:{target}.adoc[{titles[p]}]")
-        out.append("")
-    return "\n".join(out).rstrip() + "\n"
+        pages = [(posixpath.basename(p) if internal else p, titles[p]) for p in sec["pages"]]
+        if pages and pages[0][1] == sec["title"]:
+            out.append(f"* xref:{pages[0][0]}.adoc[{sec['title']}]")
+            pages = pages[1:]
+        else:
+            out.append(f"* {sec['title']}")
+        out.extend(f"** xref:{target}.adoc[{title}]" for target, title in pages)
+    return "\n".join(out) + "\n"
 
 
 def convert_antora(src: Path, dest: Path) -> None:

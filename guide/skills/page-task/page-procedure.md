@@ -9,6 +9,7 @@ Run every command from the guide project root with path arguments. Never `cd` in
 1. **Add the page rules first.** Append the brief's content rules for this page to `guide-rules.yaml` (`require`, `forbid`, `require_order` per glob). Run `make check` and confirm the new rules fail. This keeps the rules honest: a rule that passes before the page exists checks nothing.
 
 2. **Write the skeleton.** Create the page with its title, an empty source block, and the stub marker (`// STUB` in AsciiDoc, `<!-- STUB -->` in Markdown), and add it to the navigation in the order the plan gives. Commit nothing yet.
+   In an Antora `nav.adoc`, keep one list: each section is a top-level item (`* xref:user/index.adoc[User guide]`, or plain text such as `* Overview` when the section has no page of its own) and its pages are `**` items under it. Do not add `.Title` list titles for sections; the top-level item already names the section, and a title without a blank line before it turns into text of the item above (`make check` fails on the missing blank line and warns on the repeated name, both as `nav-format`).
 
 3. **Verify facts and list sources.** For every fact in the brief's fact list, and every further fact you plan to write:
    - Find it in the pinned source directory printed by `uv run tools/guide/fetch.py where <source-id>` (for example `rg -n 'port' "$(uv run tools/guide/fetch.py where mini)/config/"` or `sed -n '1,40p' .guide/cache/mini/Makefile`), or at a `url:` source.
