@@ -42,3 +42,27 @@ def test_pr_check_workflow():
     assert "drift.py --pr --base" in run["run"] and "--head" in run["run"]
     assert "pipefail" in run["run"]
     assert "secrets." not in (TEMPLATES / "guide-pr-check.yml").read_text()
+
+
+def test_pages_workflow():
+    data = render("guide-pages.yml", ".")
+    text = (TEMPLATES / "guide-pages.yml").read_text()
+    assert data["on"]["push"]["branches"] == ["main"] and "workflow_dispatch" in data["on"]
+    assert data["permissions"] == {"contents": "read", "pages": "write", "id-token": "write"}
+    assert data["concurrency"] == {"group": "pages", "cancel-in-progress": False}
+    assert data["defaults"] == {"run": {"working-directory": "."}}
+    steps = data["jobs"]["build"]["steps"]
+    checkout = next(s for s in steps if s.get("uses", "").startswith("actions/checkout"))
+    assert checkout["with"] == {"fetch-depth": 0, "persist-credentials": False}
+    runs = [s.get("run", "") for s in steps]
+    site = next(i for i, r in enumerate(runs) if r.strip() == "make site")
+    leak = next(i for i, r in enumerate(runs) if "leakcheck.py build/site" in r)
+    upload = next(i for i, s in enumerate(steps) if s.get("uses", "").startswith("actions/upload-pages-artifact"))
+    assert site < leak < upload
+    assert steps[upload]["with"]["path"] == "build/site"
+    assert not any(s.get("continue-on-error") for s in steps)
+    deploy = data["jobs"]["deploy"]
+    assert deploy["needs"] == "build" and deploy["environment"]["name"] == "github-pages"
+    assert any(s.get("uses", "").startswith("actions/deploy-pages") for s in deploy["steps"])
+    assert "secrets." not in text and "site-internal" not in text and "fetch-baseline" not in text
+    assert chr(0x2014) not in text and chr(0x2013) not in text

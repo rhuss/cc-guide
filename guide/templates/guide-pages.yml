@@ -1,0 +1,76 @@
+# GitHub Pages for a cc-guide guide project (antora and mkdocs formats).
+# Installed by /guide:create as .github/workflows/guide-pages.yml when the author opts in,
+# at the end of the run, so pushes made while pages are still being written never deploy.
+# Every push to main builds the shareable view (make site), runs the leak check on it, and
+# publishes build/site. The internal view is never built or published here.
+#
+# The published site is public on the web, also when the repository is private (Pages
+# from a private repository needs a paid GitHub plan). Pages must be set to deploy from
+# GitHub Actions once:
+#
+#   gh api -X POST repos/<owner>/<repo>/pages -f build_type=workflow
+#
+# Until then the deploy job fails. The job needs no tokens: make site builds from the
+# committed pages and the attributes in baseline.yaml and fetches no source.
+name: guide pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time; a running deployment is never cancelled halfway.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: {{GUIDE_DIR}}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The Antora playbook reads the content from this git repository at HEAD.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Build the shareable view
+        env:
+          # The PDF printer's browser is not needed for the site.
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+        run: make site
+
+      - name: Leak check
+        run: uv run --quiet tools/guide/leakcheck.py build/site
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
