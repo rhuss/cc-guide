@@ -66,3 +66,17 @@ def test_pages_workflow():
     assert any(s.get("uses", "").startswith("actions/deploy-pages") for s in deploy["steps"])
     assert "secrets." not in text and "site-internal" not in text and "fetch-baseline" not in text
     assert chr(0x2014) not in text and chr(0x2013) not in text
+
+
+SKILL = Path(__file__).resolve().parents[2] / "guide" / "skills" / "create" / "SKILL.md"
+
+
+def test_create_skill_offers_pages():
+    text = SKILL.read_text()
+    assert "Publish the shareable view on GitHub Pages? (default no)" in text
+    assert "public on the web" in text and "paid GitHub plan" in text
+    assert "guide-pages.yml" in text and "pages.enabled: true" in text
+    assert "gh api -X POST repos/<owner>/<repo>/pages -f build_type=workflow" in text
+    assert "deploys fail until Pages is switched on" in text
+    assert "`site.url` in `site.yml`" in text and "`site_url` in `mkdocs.yml`" in text
+    assert chr(0x2014) not in text and chr(0x2013) not in text

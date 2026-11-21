@@ -242,7 +242,7 @@ Next to the drift check sentence, one sentence: the opt-in Pages workflow (`.git
 
 - [ ] **Step 5: Verify**
 
-Run: `make test && make validate && rg -n "$(printf '—|–')" guide/skills/create/SKILL.md README.md guide/templates/guide-pages.yml brainstorm/08-pages-deploy.md || echo clean`
+Run: `make test && make validate && rg -n "$(python3 -c 'print(chr(0x2014) + \"|\" + chr(0x2013))')" guide/skills/create/SKILL.md README.md guide/templates/guide-pages.yml brainstorm/08-pages-deploy.md || echo clean`
 Expected: tests pass, plugin validation passes, `clean`.
 
 - [ ] **Step 6: Commit**

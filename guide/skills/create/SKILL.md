@@ -92,6 +92,7 @@ Ask with AskUserQuestion, at most four questions per call, recommended option fi
 11. **Cluster connections** (optional): name, kubeconfig path (stored as a reference only), context, disposable (default no).
 12. **Scheduled drift check** (FR-025b): offer the weekly GitHub workflow; default no.
 13. **Remote repository** (FR-005c): offer to create one, private by default. When yes, ask for the owner/name and visibility, and remember that creating it needs a final confirmation in section 5. Separately, ask once whether to push after each completed task (default no). Without the push opt-in the run only commits locally.
+14. **GitHub Pages** (separate guide with format `antora` or `mkdocs` only): ask "Publish the shareable view on GitHub Pages? (default no)". When the remote is or will be private, say first that the site is public on the web regardless of repository visibility and that Pages from a private repository needs a paid GitHub plan. The internal view is never published.
 
 Record the answers in your working notes. Do not write files yet.
 
@@ -108,6 +109,7 @@ In embedded mode the intake changes as follows; everything else stays as above.
 - **Pull request check** (FR-025): offer "Check every pull request for changes to files the guide cites? (default no)". Explain the `guide-skip` label that maintainers use when a change does not touch documented behavior.
 - **Scheduled drift check**: offered as today.
 - **Remote repository**: not offered (question 13 is skipped); the guide lives in the host repository. Ask only whether to push after each completed task (default no).
+- **GitHub Pages**: not offered (question 14 is skipped); a gfm guide renders on GitHub.
 
 ## 5. Project setup
 
@@ -218,14 +220,16 @@ Run `make check`, then `uv run tools/guide/check.py --structure` (every persona'
 ## 9. Wrap-up (FR-014, FR-031)
 
 1. **Upstream findings**: for each collected Upstream candidate, add it with `uv run tools/guide/runs.py findings-add --source <id> --kind <kind> --location <path>:<lines> --quote "<text at the pinned commit>" --summary "<one sentence>" --evidence "<what contradicts what>"`. Kinds: `doc-drift`, `stale-reference`, `dead-config`, `missing-doc`, `naming-ux`, `bug`.
-2. **Run summary** (an embedded guide adds the dropped claims and keeps `local:` inputs to their ids, see section 10): `uv run tools/guide/runs.py summary --workspace "$WS" --run-id <run-id> --command create --rigor <rigor> --model "<your model name>" --effort <high|xhigh>`. It writes `runs/<run-id>.md`.
-3. **Commit** the findings and the run summary (`docs(guide): run summary <run-id>`), and push when opted in.
-4. **Canvas**: when diagram tasks backed up the author's canvas, ask whether to restore the author's drawing now or keep the last diagram on the canvas. Restore as in the `guide:diagrams` skill step 2 (`clear_canvas`, check that `elements_count` is 0, `import_scene` from the backup, check the count), and name the backup path either way.
-5. **Report to the author**:
+2. **GitHub Pages** (when opted in): render `$PLUGIN/templates/guide-pages.yml` as in section 11. When the owner and repository of the remote are known, set the site URL `https://<owner>.github.io/<repo>/`: `site.url` in `site.yml` (Antora; never in `site-internal.yml`) or `site_url` in `mkdocs.yml`. Write the `pages` block to `guide.yaml` (`pages.enabled: true`, and `pages.url` with the same URL when known; the template has a commented example) and run `uv run tools/guide/guidecfg.py validate`. Commit `ci: publish the guide with GitHub Pages`. With a GitHub remote, show `gh api -X POST repos/<owner>/<repo>/pages -f build_type=workflow` (it switches Pages to deploy from GitHub Actions) and run it only after the author approves; the next push to `main` then publishes the site.
+3. **Run summary** (an embedded guide adds the dropped claims and keeps `local:` inputs to their ids, see section 10): `uv run tools/guide/runs.py summary --workspace "$WS" --run-id <run-id> --command create --rigor <rigor> --model "<your model name>" --effort <high|xhigh>`. It writes `runs/<run-id>.md`.
+4. **Commit** the findings and the run summary (`docs(guide): run summary <run-id>`), and push when opted in.
+5. **Canvas**: when diagram tasks backed up the author's canvas, ask whether to restore the author's drawing now or keep the last diagram on the canvas. Restore as in the `guide:diagrams` skill step 2 (`clear_canvas`, check that `elements_count` is 0, `import_scene` from the backup, check the count), and name the backup path either way.
+6. **Report to the author**:
    - the guide location, format, page count per persona, diagrams
    - every ruling from the ledger ("Rulings I made"), in order, each with what it costs if wrong (FR-014)
    - findings rejected by source, and the upstream findings collected (suggest `/guide:upstream`)
    - unpushed commits, if any
+   - with GitHub Pages: the site URL; when Pages was not switched on (declined, or no remote yet), the `gh api` command from step 2 and that deploys fail until Pages is switched on
    - next steps: `/guide:preview`, `/guide:export`, `/guide:validate` (when clusters are configured)
 
 ## 10. Embedded guides: additions to sections 6 to 9
@@ -238,11 +242,12 @@ Run `make check`, then `uv run tools/guide/check.py --structure` (every persona'
 
 ## 11. Workflows
 
-Both workflow templates contain `{{GUIDE_DIR}}`, the working directory of their steps. Render it to `.` for a separate guide (the result equals the previous template) and to the guide subdirectory name for an embedded guide.
+All workflow templates contain `{{GUIDE_DIR}}`, the working directory of their steps. Render it to `.` for a separate guide (the result equals the previous template) and to the guide subdirectory name for an embedded guide.
 
 - **Scheduled drift check** (when opted in): render `$PLUGIN/templates/guide-drift.yml` to `.github/workflows/guide-drift.yml` at the repository root (the host root in embedded mode; GitHub reads workflows only there).
 - **Pull request check** (embedded, when opted in, FR-025 to FR-028): render `$PLUGIN/templates/guide-pr-check.yml` to `HOST/.github/workflows/guide-pr-check.yml` and set `embedded.pr_check: on`. It runs `drift.py --pr` for the `self` source only, with read-only permissions, and passes for pull requests labelled `guide-skip`.
-- Before writing either file, check that the target path does not exist; when it does, stop and ask for another file name. Never overwrite a workflow.
+- **GitHub Pages** (separate Antora or MkDocs guide, when opted in): render `$PLUGIN/templates/guide-pages.yml` to `.github/workflows/guide-pages.yml` with `{{GUIDE_DIR}}` as `.`. It is installed in the wrap-up (section 9), never at setup, so pushes made during page tasks never deploy a half-written guide. On every push to `main` it runs `make site` and the leak check, then publishes `build/site`; it needs no secrets.
+- Before writing any of these files, check that the target path does not exist; when it does, stop and ask for another file name. Never overwrite a workflow.
 
 ## Rules
 
