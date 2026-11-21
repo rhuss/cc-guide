@@ -12,6 +12,7 @@ Last updated: 2026-11-09
 | 04 | 2026-11-06 | multi-harness-support | active | - | - |
 | 05 | 2026-11-07 | embedded-guide | active | - | - |
 | 06 | 2026-11-09 | author-owned-front-page-region | active | - | - |
+| 08 | 2026-11-21 | pages-deploy | active | - | - |
 
 ## Open Threads
 - How does cc-guide detect superpowers version drift (renamed skills or scripts), and what is the fallback? (from #01)
