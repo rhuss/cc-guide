@@ -56,7 +56,7 @@ New question after the remote repository question, asked only for a separate gui
 When opted in, after the final review:
 
 1. Check that `.github/workflows/guide-pages.yml` does not exist (never overwrite a workflow), then render the template.
-2. Set the site URL when owner and repository are known: `site.url` in `site.yml` and `site-internal.yml` (Antora; `playbook.py` copies it into generated playbooks) or `site_url` in `mkdocs.yml`. Links stay relative, so the site works under `/<repo>/` either way.
+2. Set the site URL when owner and repository are known: `site.url` in `site.yml` only (Antora; `playbook.py` copies it into generated playbooks; the internal view is never published, so `site-internal.yml` keeps no public URL) or `site_url` in `mkdocs.yml`. Links stay relative, so the site works under `/<repo>/` either way.
 3. Record `pages.enabled: true` and `pages.url` in `guide.yaml`; `guidecfg.py validate` accepts the new block.
 4. Commit `ci: publish the guide with GitHub Pages`.
 5. When a GitHub remote exists, show `gh api -X POST repos/<owner>/<repo>/pages -f build_type=workflow` and run it only after explicit approval. Without a remote, put the command in the run summary for later.
