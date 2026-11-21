@@ -973,3 +973,64 @@ def test_publish_page_existence_checked_by_validate_only(tmp_guide):
     problems, _ = guidecfg.validate(root)
     assert "guide.yaml:publish.page: docs/gone.md not found" in problems, problems
 
+
+
+# --- pages block (brainstorm/08-pages-deploy) ---------------------------------------
+
+
+def set_pages(root: Path, **values) -> None:
+    edit(root / "guide.yaml", lambda d: d.update(pages=values))
+
+
+def antora_guide(root: Path) -> Path:
+    root = make_gfm_guide(root)
+    vendor_adapter(root, "antora")
+    edit(root / "guide.yaml", lambda d: d.update(format="antora"))
+    return root
+
+
+def test_pages_block_loads(tmp_guide):
+    root = antora_guide(tmp_guide)
+    set_pages(root, enabled=True, url="https://rhuss.github.io/my-guide/")
+    g = guidecfg.load_guide(root)
+    assert g.pages == guidecfg.Pages(enabled=True, url="https://rhuss.github.io/my-guide/")
+
+
+def test_guide_without_pages_block(tmp_guide):
+    assert guidecfg.load_guide(antora_guide(tmp_guide)).pages is None
+
+
+@pytest.mark.parametrize("values, key", [
+    ({"enabled": "yes"}, "pages.enabled"),
+    ({"enabled": True, "url": "http://x.github.io/r/"}, "pages.url"),
+    ({"enabled": True, "url": "https://x.github.io/r"}, "pages.url"),
+    ({"enabled": True, "url": 42}, "pages.url"),
+    ({"enabled": True, "branch": "gh-pages"}, "pages.branch"),
+])
+def test_pages_block_rejects_bad_values(tmp_guide, values, key):
+    root = antora_guide(tmp_guide)
+    set_pages(root, **values)
+    assert key in config_error(guidecfg.load_guide, root)
+
+
+def test_pages_rejected_for_gfm(tmp_guide):
+    root = make_gfm_guide(tmp_guide)
+    set_pages(root, enabled=True)
+    msg = config_error(guidecfg.load_guide, root)
+    assert "pages" in msg and "antora or mkdocs" in msg
+
+
+def test_pages_enabled_without_url_is_valid(tmp_guide):   # no remote yet
+    root = antora_guide(tmp_guide)
+    set_pages(root, enabled=True)
+    assert guidecfg.load_guide(root).pages == guidecfg.Pages(enabled=True, url="")
+
+
+def test_get_pages_keys(tmp_guide):
+    root = antora_guide(tmp_guide)
+    assert guidecfg.GET_KEYS["pages.enabled"](guidecfg.load_guide(root)) == "false"
+    assert guidecfg.GET_KEYS["pages.url"](guidecfg.load_guide(root)) == ""
+    set_pages(root, enabled=True, url="https://o.github.io/r/")
+    g = guidecfg.load_guide(root)
+    assert guidecfg.GET_KEYS["pages.enabled"](g) == "true"
+    assert guidecfg.GET_KEYS["pages.url"](g) == "https://o.github.io/r/"

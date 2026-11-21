@@ -65,6 +65,12 @@ validate:
 drift:
   schedule: "off"
 
+# GitHub Pages (antora and mkdocs only; .github/workflows/guide-pages.yml). /guide:create
+# writes this block when the author opts in. The site is public even for a private repository.
+# pages:
+#   enabled: true
+#   url: https://<owner>.github.io/<repo>/
+
 upstream:
   target: github
 

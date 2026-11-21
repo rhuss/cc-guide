@@ -23,7 +23,7 @@ Usage: uv run tools/guide/guidecfg.py validate [--allow-missing-front-page] [--r
          prints one value: title, slug, format, rigor, internal.enabled,
          drift.schedule, baseline.captured, or embedded.front_page,
          embedded.developer_readme, embedded.stubs, embedded.pr_check (empty when
-         the guide is not embedded)
+         the guide is not embedded), pages.enabled, pages.url
        uv run tools/guide/guidecfg.py discover [--dir DIR]
          prints the guide root: DIR when it holds guide.yaml, otherwise the one
          guide project found in the shallowest of the directories up to three levels
@@ -133,6 +133,14 @@ class Publish:
 
 
 @dataclass
+class Pages:
+    """The guide.yaml `pages` block: the shareable view is published with GitHub Pages
+    by .github/workflows/guide-pages.yml (antora and mkdocs guides only)."""
+    enabled: bool = False
+    url: str = ""   # https://<owner>.github.io/<repo>/, empty while the remote is unknown
+
+
+@dataclass
 class Guide:
     root: Path
     schema: int
@@ -157,6 +165,8 @@ class Guide:
     embedded: Embedded | None = None
     # The `publish` block (None when the guide publishes no README region).
     publish: Publish | None = None
+    # The `pages` block (None when the guide is not published with GitHub Pages).
+    pages: Pages | None = None
 
     @property
     def slug(self) -> str:
@@ -523,9 +533,12 @@ class _Checker:
 # --- loaders ----------------------------------------------------------------
 
 GUIDE_KEYS = {"schema", "title", "format", "personas", "sections", "rigor", "internal",
-              "clusters", "validate", "drift", "upstream", "branding", "embedded", "publish"}
+              "clusters", "validate", "drift", "upstream", "branding", "embedded", "publish",
+              "pages"}
 EMBEDDED_KEYS = {"front_page", "developer_readme", "stubs", "pr_check"}
 PUBLISH_KEYS = {"page", "target"}
+PAGES_KEYS = {"enabled", "url"}
+PAGES_FORMATS = ("antora", "mkdocs")
 
 
 def load_adapter(root: Path, required: bool = True) -> Adapter | None:
@@ -633,6 +646,9 @@ def load_guide(root: Path) -> Guide:
     publish = None
     if "publish" in data:
         publish = _load_publish(c, root, data.get("publish"), fmt)
+    pages = None
+    if "pages" in data:
+        pages = _load_pages(c, data.get("pages"), fmt)
 
     c.raise_if_any()
     # confidential.local.yaml belongs to embedded guides only; a separate guide keeps its
@@ -642,7 +658,7 @@ def load_guide(root: Path) -> Guide:
                  sections=sections, rigor=rigor, internal_enabled=internal_enabled,
                  confidential_terms=terms + local_terms, confidential_patterns=patterns + local_patterns,
                  clusters=clusters, extra_queries=extra, drift_schedule=schedule, upstream_target=target,
-                 branding=brand, embedded=embedded, publish=publish)
+                 branding=brand, embedded=embedded, publish=publish, pages=pages)
 
 
 def _load_embedded(c: _Checker, root: Path, value: Any, fmt: Any, internal_enabled: bool,
@@ -693,6 +709,26 @@ def _load_embedded(c: _Checker, root: Path, value: Any, fmt: Any, internal_enabl
     if front is None:
         return None
     return Embedded(front_page=front, developer_readme=dev, stubs=stubs, pr_check=pr == "on")
+
+
+def _load_pages(c: _Checker, value: Any, fmt: Any) -> Pages:
+    """Parse and check the `pages` block (brainstorm/08-pages-deploy).
+
+    `enabled` is a boolean (default false); `url`, when given, is an https URL ending
+    in a slash, because it becomes the site URL of the build. Antora and MkDocs only:
+    a gfm guide (embedded guides included) renders on GitHub without a site build.
+    """
+    raw = c.mapping(value, "pages", PAGES_KEYS)
+    if fmt is not None and fmt not in PAGES_FORMATS:
+        c.add("pages", f"GitHub Pages needs the antora or mkdocs format (got {fmt!r})")
+    enabled = c.boolean(raw.get("enabled"), "pages.enabled")
+    url = raw.get("url")
+    if url is None or url == "":
+        url = ""
+    elif not isinstance(url, str) or not url.startswith("https://") or not url.endswith("/"):
+        c.add("pages.url", f"must be an https URL ending in a slash (got {url!r})")
+        url = ""
+    return Pages(enabled=enabled, url=url)
 
 
 def _load_publish(c: _Checker, root: Path, value: Any, fmt: Any) -> Publish | None:
@@ -1050,6 +1086,8 @@ GET_KEYS = {
     if g.embedded and g.embedded.developer_readme else "",
     "embedded.stubs": lambda g: " ".join(_rel_cfg(g, s) for s in g.embedded.stubs) if g.embedded else "",
     "embedded.pr_check": lambda g: ("on" if g.embedded.pr_check else "off") if g.embedded else "",
+    "pages.enabled": lambda g: "true" if g.pages and g.pages.enabled else "false",
+    "pages.url": lambda g: g.pages.url if g.pages else "",
 }
 
 
