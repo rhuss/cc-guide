@@ -48,7 +48,7 @@ def test_pages_workflow():
     data = render("guide-pages.yml", ".")
     text = (TEMPLATES / "guide-pages.yml").read_text()
     assert data["on"]["push"]["branches"] == ["main"] and "workflow_dispatch" in data["on"]
-    assert data["permissions"] == {"contents": "read", "pages": "write", "id-token": "write"}
+    assert data["permissions"] == {"contents": "read"}
     assert data["concurrency"] == {"group": "pages", "cancel-in-progress": False}
     assert data["defaults"] == {"run": {"working-directory": "."}}
     steps = data["jobs"]["build"]["steps"]
@@ -63,6 +63,9 @@ def test_pages_workflow():
     assert not any(s.get("continue-on-error") for s in steps)
     deploy = data["jobs"]["deploy"]
     assert deploy["needs"] == "build" and deploy["environment"]["name"] == "github-pages"
+    assert "permissions" not in data["jobs"]["build"]   # npm install never holds the deploy token
+    assert deploy["permissions"] == {"pages": "write", "id-token": "write"}
+    assert not any(s.get("uses", "").startswith("actions/configure-pages") for s in steps)
     assert any(s.get("uses", "").startswith("actions/deploy-pages") for s in deploy["steps"])
     assert "secrets." not in text and "site-internal" not in text and "fetch-baseline" not in text
     assert chr(0x2014) not in text and chr(0x2013) not in text
@@ -78,5 +81,6 @@ def test_create_skill_offers_pages():
     assert "guide-pages.yml" in text and "pages.enabled: true" in text
     assert "gh api -X POST repos/<owner>/<repo>/pages -f build_type=workflow" in text
     assert "deploys fail until Pages is switched on" in text
+    assert "for a private remote, that the site is public on the web" in text
     assert "`site.url` in `site.yml`" in text and "`site_url` in `mkdocs.yml`" in text
     assert chr(0x2014) not in text and chr(0x2013) not in text

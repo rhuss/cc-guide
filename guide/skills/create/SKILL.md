@@ -229,7 +229,7 @@ Run `make check`, then `uv run tools/guide/check.py --structure` (every persona'
    - every ruling from the ledger ("Rulings I made"), in order, each with what it costs if wrong (FR-014)
    - findings rejected by source, and the upstream findings collected (suggest `/guide:upstream`)
    - unpushed commits, if any
-   - with GitHub Pages: the site URL; when Pages was not switched on (declined, or no remote yet), the `gh api` command from step 2 and that deploys fail until Pages is switched on
+   - with GitHub Pages: the site URL; when Pages was not switched on (declined, or no remote yet), the `gh api` command from step 2 and that deploys fail until Pages is switched on; for a private remote, that the site is public on the web
    - next steps: `/guide:preview`, `/guide:export`, `/guide:validate` (when clusters are configured)
 
 ## 10. Embedded guides: additions to sections 6 to 9

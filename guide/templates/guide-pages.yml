@@ -10,7 +10,7 @@
 #
 #   gh api -X POST repos/<owner>/<repo>/pages -f build_type=workflow
 #
-# Until then the deploy job fails. The job needs no tokens: make site builds from the
+# Until then the deploy job fails. The build needs no tokens: make site builds from the
 # committed pages and the attributes in baseline.yaml and fetches no source.
 name: guide pages
 
@@ -19,10 +19,10 @@ on:
     branches: [main]
   workflow_dispatch: {}
 
+# The build job (npm install, make site) only reads; the deploy token belongs to the
+# deploy job alone, so nothing in the build can publish past the leak check.
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 # One deployment at a time; a running deployment is never cancelled halfway.
 concurrency:
@@ -59,8 +59,6 @@ jobs:
       - name: Leak check
         run: uv run --quiet tools/guide/leakcheck.py build/site
 
-      - uses: actions/configure-pages@v5
-
       - uses: actions/upload-pages-artifact@v3
         with:
           path: build/site
@@ -68,6 +66,9 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
