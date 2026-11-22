@@ -1,6 +1,6 @@
 # Brainstorm Overview
 
-Last updated: 2026-11-09
+Last updated: 2026-11-22
 
 ## Sessions
 
@@ -12,7 +12,9 @@ Last updated: 2026-11-09
 | 04 | 2026-11-06 | multi-harness-support | active | - | - |
 | 05 | 2026-11-07 | embedded-guide | active | - | - |
 | 06 | 2026-11-09 | author-owned-front-page-region | active | - | - |
+| 07 | 2026-11-19 | nested-guide-discovery | active | - | [#4](https://github.com/rhuss/cc-guide/issues/4) |
 | 08 | 2026-11-21 | pages-deploy | active | - | - |
+| 09 | 2026-11-22 | captured-visuals | active | - | - |
 
 ## Open Threads
 - How does cc-guide detect superpowers version drift (renamed skills or scripts), and what is the fallback? (from #01)
@@ -50,6 +52,19 @@ Last updated: 2026-11-09
 - gfm-only in v1 or a general adapter "publish" capability (from #06)
 - Whether checks warn about relative links in the author region when a registry publishes the README (from #06)
 
+- Which renderer turns ANSI output into SVG or HTML, and how are Unicode block characters, emoji, and underlined links rendered faithfully? (from #09)
+- How does the recipe declare the tool environment: an image reference plus ports, a compose-like file, or a kind cluster with the guide's own install steps? (from #09)
+- How do the three adapters (Antora, MkDocs, gfm) embed SVG or HTML CLI renders, and what does the PDF export do with them? (from #09)
+- Thresholds for visual drift: which perceptual difference and which sidecar change count as a finding, and how are timestamps and other volatile values masked? (from #09)
+- Where do the capture container image definition and its version pins live, and is the image built per guide or shared by the plugin? (from #09)
+- How does a CI job without podman-in-podman (for example GitHub Actions runners) run the capture container and kind? (from #09)
+- How do redaction rules get configured per guide, and what is the default pattern set (hostnames, paths, tokens, user names)? (from #09)
+- What does the review of an annotated screenshot check: that the highlighted selector exists in the sidecar and that the callout label matches the page text? (from #09)
+
 ## Parked Ideas
 - Strict rigor without a claim ledger (#03)
   Reason: not decided; approach A proposed, to be implemented on its own branch
+- Pluggable capture providers for platform-only UIs (#09)
+  Reason: v1 covers standalone tools only
+- Animations: UI filmstrips and terminal playback (#09)
+  Reason: deferred to a later version
