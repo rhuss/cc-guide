@@ -20,6 +20,10 @@ dist, and the preview) asks this script for its playbook before Antora runs:
 - Antora cannot read `url: .` inside a linked worktree, where `.git` is a file. There
   the generated playbook points every `url: .` content source at the main repository
   with `branches: <worktree branch>` and `worktrees: <worktree name>`.
+- Antora reads a local content source only from the top of a git working tree. For a
+  guide kept in a subdirectory of a repository (for example docs/guide/), the generated
+  playbook points every `url: .` source at that top level (the main repository in a
+  linked worktree) and prefixes its start_path with the guide's path (docs/guide/content).
 - Antora resolves `.` and `./` paths against the playbook's own directory, which is
   build/ for a generated playbook, so in a main checkout every `url: .` becomes the
   absolute guide root, and other local content sources, output.dir, output
@@ -55,8 +59,24 @@ class BrandingProblems(Exception):
         super().__init__("\n".join(lines))
 
 
+def _git_ok(root: Path, *args: str) -> str | None:
+    """git output, or None when git fails (for example outside a repository)."""
+    proc = subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True)
+    return proc.stdout.strip() if proc.returncode == 0 else None
+
+
 def is_linked_worktree(root: Path) -> bool:
-    return (Path(root) / ".git").is_file()
+    """True inside a linked worktree, also in a subdirectory of one; False outside git."""
+    out = _git_ok(root, "rev-parse", "--path-format=absolute", "--absolute-git-dir", "--git-common-dir")
+    if out is None:
+        return False
+    git_dir, common = out.splitlines()
+    return Path(git_dir).resolve() != Path(common).resolve()
+
+
+def _repo_prefix(root: Path) -> str:
+    """The guide root's path inside its working tree ("docs/guide/"), "" at the top or outside git."""
+    return _git_ok(root, "rev-parse", "--show-prefix") or ""
 
 
 def _git(root: Path, *args: str) -> str:
@@ -90,7 +110,8 @@ def path(root: Path, internal: bool = False) -> Path:
     branded = raw is not None
     overlaid = os.path.lexists(root / branding.OVERLAY)
     linked = is_linked_worktree(root)
-    if not (branded or overlaid or linked):
+    prefix = _repo_prefix(root)
+    if not (branded or overlaid or linked or prefix):
         return source
 
     data = yaml.safe_load(source.read_text()) or {}
@@ -107,8 +128,13 @@ def path(root: Path, internal: bool = False) -> Path:
             src["branches"] = branch
             src["worktrees"] = git_dir.name
     else:
+        top = _git_ok(root, "rev-parse", "--show-toplevel") if prefix else None
         for src in sources:
-            src["url"] = str(root)
+            src["url"] = top or str(root)
+    if prefix:
+        # Antora reads a local content source only from the top of a git working tree.
+        for src in sources:
+            src["start_path"] = (prefix + str(src.get("start_path") or "")).rstrip("/")
     for src in (data.get("content") or {}).get("sources") or []:
         url = src.get("url") if isinstance(src, dict) else None
         if isinstance(url, str) and url.startswith(".") and src not in sources:
@@ -150,6 +176,8 @@ def path(root: Path, internal: bool = False) -> Path:
             reasons.append("ui/supplemental")
     if linked:
         reasons.append("linked git worktree")
+    if prefix:
+        reasons.append("guide in a repository subdirectory")
 
     out = root / "build" / ("playbook-internal.yml" if internal else "playbook.yml")
     out.parent.mkdir(parents=True, exist_ok=True)

@@ -74,6 +74,53 @@ def test_linked_worktree_generates_playbook(repo):
     assert "clean" not in data["output"]           # unbranded: Antora's default as before
 
 
+def host_with_guide(tmp_path) -> tuple[Path, Path]:
+    host = tmp_path / "host"
+    guide = host / "docs" / "guide"
+    guide.mkdir(parents=True)
+    git("init", "-q", "-b", "main", cwd=host)
+    (guide / "site.yml").write_text(yaml.safe_dump(SITE, sort_keys=False))
+    (guide / "site-internal.yml").write_text(yaml.safe_dump(SITE_INTERNAL, sort_keys=False))
+    (host / "main.go").write_text("package main\n")
+    (host / ".gitignore").write_text(".claude/\n")
+    git("add", "-A", cwd=host)
+    git("-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-q", "-m", "init", cwd=host)
+    return host, guide
+
+
+def test_guide_in_subdirectory_generates_playbook(tmp_path):
+    host, guide = host_with_guide(tmp_path)
+    out = playbook.path(guide, internal=False)
+    assert out == guide / "build" / "playbook.yml"
+    assert "guide in a repository subdirectory" in out.read_text().splitlines()[0]
+    data = yaml.safe_load(out.read_text())
+    (src,) = data["content"]["sources"]
+    assert Path(src["url"]).resolve() == host.resolve()
+    assert src["start_path"] == "docs/guide/content" and src["branches"] == "HEAD"
+    assert Path(data["output"]["dir"]) == (guide / "build" / "site").resolve()
+    internal = yaml.safe_load(playbook.path(guide, internal=True).read_text())
+    assert [s["start_path"] for s in internal["content"]["sources"]] == ["docs/guide/content", "docs/guide/internal"]
+
+
+def test_guide_in_subdirectory_of_linked_worktree(tmp_path):
+    host, _ = host_with_guide(tmp_path)
+    wt = host / ".claude" / "worktrees" / "002-pages"
+    git("worktree", "add", "-q", "-b", "002-pages", str(wt), cwd=host)
+    guide = wt / "docs" / "guide"
+    assert playbook.is_linked_worktree(guide)
+    data = yaml.safe_load(playbook.path(guide, internal=False).read_text())
+    (src,) = data["content"]["sources"]
+    assert Path(src["url"]).resolve() == host.resolve()
+    assert src["branches"] == "002-pages" and src["worktrees"] == "002-pages"
+    assert src["start_path"] == "docs/guide/content"
+
+
+def test_non_git_guide_uses_site_yml(tmp_path):
+    (tmp_path / "site.yml").write_text(yaml.safe_dump(SITE, sort_keys=False))
+    assert not playbook.is_linked_worktree(tmp_path)
+    assert playbook.path(tmp_path, internal=False) == tmp_path / "site.yml"
+
+
 def test_remote_ui_bundle_kept(repo):
     wt = repo / ".claude" / "worktrees" / "002-x"
     git("worktree", "add", "-q", "-b", "002-x", str(wt), cwd=repo)
