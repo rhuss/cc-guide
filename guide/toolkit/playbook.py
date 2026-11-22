@@ -60,18 +60,32 @@ class BrandingProblems(Exception):
 
 
 def _git_ok(root: Path, *args: str) -> str | None:
-    """git output, or None when git fails (for example outside a repository)."""
-    proc = subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True)
+    """git output, or None when git fails (outside a repository, or no git binary)."""
+    try:
+        proc = subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True)
+    except OSError:
+        return None
     return proc.stdout.strip() if proc.returncode == 0 else None
+
+
+def _git_dir(root: Path) -> Path | None:
+    out = _git_ok(root, "rev-parse", "--absolute-git-dir")
+    return Path(out) if out else None
+
+
+def _common_dir(git_dir: Path) -> Path:
+    """The main repository's git directory: a linked worktree's git directory names it in
+    its `commondir` file (git 2.5 on; no --path-format, which git before 2.31 lacks)."""
+    commondir = git_dir / "commondir"
+    if not commondir.is_file():
+        return git_dir
+    return (git_dir / commondir.read_text().strip()).resolve()
 
 
 def is_linked_worktree(root: Path) -> bool:
     """True inside a linked worktree, also in a subdirectory of one; False outside git."""
-    out = _git_ok(root, "rev-parse", "--path-format=absolute", "--absolute-git-dir", "--git-common-dir")
-    if out is None:
-        return False
-    git_dir, common = out.splitlines()
-    return Path(git_dir).resolve() != Path(common).resolve()
+    git_dir = _git_dir(root)
+    return git_dir is not None and _common_dir(git_dir) != git_dir.resolve()
 
 
 def _repo_prefix(root: Path) -> str:
@@ -118,8 +132,8 @@ def path(root: Path, internal: bool = False) -> Path:
     sources = [s for s in (data.get("content") or {}).get("sources") or []
                if isinstance(s, dict) and str(s.get("url", "")).rstrip("/") in (".", "./")]
     if linked:
-        git_dir = Path(_git(root, "rev-parse", "--absolute-git-dir"))
-        common = Path(_git(root, "rev-parse", "--path-format=absolute", "--git-common-dir"))
+        git_dir = _git_dir(root)
+        common = _common_dir(git_dir)
         branch = _git(root, "rev-parse", "--abbrev-ref", "HEAD")
         if branch == "HEAD":
             raise SystemExit(f"{root} is a linked worktree in detached HEAD state; check out a branch first")

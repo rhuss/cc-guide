@@ -246,7 +246,7 @@ All workflow templates contain `{{GUIDE_DIR}}`, the working directory of their s
 
 - **Scheduled drift check** (when opted in): render `$PLUGIN/templates/guide-drift.yml` to `.github/workflows/guide-drift.yml` at the repository root (the host root in embedded mode; GitHub reads workflows only there).
 - **Pull request check** (embedded, when opted in, FR-025 to FR-028): render `$PLUGIN/templates/guide-pr-check.yml` to `HOST/.github/workflows/guide-pr-check.yml` and set `embedded.pr_check: on`. It runs `drift.py --pr` for the `self` source only, with read-only permissions, and passes for pull requests labelled `guide-skip`.
-- **GitHub Pages** (separate Antora or MkDocs guide, when opted in): render `$PLUGIN/templates/guide-pages.yml` to `.github/workflows/guide-pages.yml` with `{{GUIDE_DIR}}` as `.`. It is installed in the wrap-up (section 9), never at setup, so pushes made during page tasks never deploy a half-written guide. On every push to `main` it runs `make site` and the leak check, then publishes `build/site`; it needs no secrets.
+- **GitHub Pages** (separate Antora or MkDocs guide, when opted in): render `$PLUGIN/templates/guide-pages.yml` to `.github/workflows/guide-pages.yml` with `{{GUIDE_DIR}}` as `.` and `{{BRANCH}}` as `main`. It is installed in the wrap-up (section 9), never at setup, so pushes made during page tasks never deploy a half-written guide. On every push to `main` it runs `make site` and the leak check, then publishes `build/site`; it needs no secrets.
 - Before writing any of these files, check that the target path does not exist; when it does, stop and ask for another file name. Never overwrite a workflow.
 
 ## Rules

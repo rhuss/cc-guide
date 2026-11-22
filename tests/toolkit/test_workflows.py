@@ -6,8 +6,8 @@ import yaml
 TEMPLATES = Path(__file__).resolve().parents[2] / "guide" / "templates"
 
 
-def render(name: str, guide_dir: str) -> dict:
-    text = (TEMPLATES / name).read_text().replace("{{GUIDE_DIR}}", guide_dir)
+def render(name: str, guide_dir: str, branch: str = "main") -> dict:
+    text = (TEMPLATES / name).read_text().replace("{{GUIDE_DIR}}", guide_dir).replace("{{BRANCH}}", branch)
     assert "{{" not in text.replace("${{", "")
     data = yaml.safe_load(text)
     data["on"] = data.pop(True, data.get("on"))   # YAML 1.1 reads the key `on` as true
@@ -79,6 +79,13 @@ def test_pages_workflow_for_a_guide_in_a_subdirectory():
                   if s.get("uses", "").startswith("actions/upload-pages-artifact"))
     assert upload["with"]["path"] == "docs/guide/build/site"
 
+
+def test_pages_workflow_runs_on_the_default_branch():
+    assert render("guide-pages.yml", "docs/guide", branch="master")["on"]["push"]["branches"] == ["master"]
+    assert "{{BRANCH}}" in (TEMPLATES / "guide-pages.yml").read_text()
+    create = SKILL.read_text()
+    assert "`{{BRANCH}}` as `main`" in create
+
 SKILL = Path(__file__).resolve().parents[2] / "guide" / "skills" / "create" / "SKILL.md"
 
 
@@ -111,6 +118,13 @@ def test_evolve_pages_mode():
                    "create section 9 step 2", "Toolkit 0.5.0 adds"):
         assert phrase in evolve, phrase
     assert "without `--check` or `--pages`" in preflight
+    assert "gh repo view --json visibility,defaultBranchRef" in evolve
+    assert "`{{BRANCH}}` set to the default branch" in evolve
+    section = evolve.split("## 3a.")[1].split("## 4.")[0]
+    order = [section.index(f"**{step}**") for step in
+             ("Format", "Repository", "Existing workflow", "Remote", "Existing Pages site",
+              "Visibility and branch", "Toolkit", "Build check", "Set up", "Report")]
+    assert order == sorted(order), order          # every read-only refusal before the first commit
     assert (GUIDE / "toolkit" / "VERSION").read_text().strip() == "0.5.0"
     for text in (evolve, command, preflight):
         assert chr(0x2014) not in text and chr(0x2013) not in text

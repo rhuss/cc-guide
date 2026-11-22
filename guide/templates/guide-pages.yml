@@ -16,7 +16,7 @@ name: guide pages
 
 on:
   push:
-    branches: [main]
+    branches: [{{BRANCH}}]   # the repository's default branch
   workflow_dispatch: {}
 
 # The build job (npm install, make site) only reads; the deploy token belongs to the

@@ -43,18 +43,18 @@ For a guide that has no cc-guide `baseline.yaml` or no source blocks. Regular ev
 
 ## 3a. GitHub Pages (`--pages`)
 
-Sets up the GitHub Pages workflow of create section 9 step 2 for an existing guide, also one kept in a subdirectory of a code repository (for example `docs/guide/`). No drift run, no superpowers, no subagents. GitHub Pages publishes from the repository the guide already lives in; no new remote is created. Run the steps in order and stop at the first refusal, writing nothing:
+Sets up the GitHub Pages workflow of create section 9 step 2 for an existing guide, also one kept in a subdirectory of a code repository (for example `docs/guide/`). No drift run, no superpowers, no subagents. GitHub Pages publishes from the repository the guide already lives in; no new remote is created. Run the steps in order and stop at the first refusal:
 
 1. **Format**: refuse gfm and embedded guides ("A gfm guide renders on GitHub without a site build.").
-2. **Toolkit**: when `tools/guide/VERSION` is below 0.5.0, offer the toolkit refresh of section 4 step 1 first and commit it on its own. Without the refresh, stop (older toolkits reject the `pages` block and cannot build an Antora guide in a subdirectory).
-3. **Repository**: the git root is `git rev-parse --show-toplevel`; the guide's path inside the repository is `git rev-parse --show-prefix` without the trailing slash (`.` at the root).
-4. **Existing workflow**: refuse when `<git root>/.github/workflows/guide-pages.yml` exists. Never overwrite a workflow.
-5. **Remote**: read owner and repository from `git remote get-url origin`. When there is no `origin`, or it is not a GitHub remote (for example GitLab), stop and say that the workflow targets GitHub Pages and publishes from the guide's own GitHub repository.
-6. **Existing Pages site**: run `gh api repos/<owner>/<repo>/pages`. When it returns a site, stop: there is one Pages site per repository, and the guide cannot take over the existing site (for example the project website). A 404 means no site yet.
-7. **Visibility**: `gh repo view --json visibility`. For a private repository, give the warning of create intake question 14 (the site is public on the web; Pages from a private repository needs a paid GitHub plan) and ask whether to continue.
+2. **Repository**: the git root is `git rev-parse --show-toplevel`; the guide's path inside the repository is `git rev-parse --show-prefix` without the trailing slash (`.` at the root).
+3. **Existing workflow**: refuse when `<git root>/.github/workflows/guide-pages.yml` exists. Never overwrite a workflow.
+4. **Remote**: read owner and repository from `git remote get-url origin`. When there is no `origin`, or it is not a GitHub remote (for example GitLab), stop and say that the workflow targets GitHub Pages and publishes from the guide's own GitHub repository.
+5. **Existing Pages site**: run `gh api repos/<owner>/<repo>/pages`. When it returns a site, stop: there is one Pages site per repository, and the guide cannot take over the existing site (for example the project website). A 404 means no site yet.
+6. **Visibility and branch**: `gh repo view --json visibility,defaultBranchRef`. For a private repository, give the warning of create intake question 14 (the site is public on the web; Pages from a private repository needs a paid GitHub plan) and ask whether to continue. The default branch is the one the workflow publishes from; when the current branch is another one, say that nothing publishes until it is merged there.
+7. **Toolkit**: when `tools/guide/VERSION` is below 0.5.0, offer the toolkit refresh of section 4 step 1 and commit it on its own. Without the refresh, stop (older toolkits reject the `pages` block and cannot build an Antora guide in a subdirectory). Steps 1 to 6 only read, so a refusal there leaves the repository untouched.
 8. **Build check**: run `make site` and the leak check (`uv run tools/guide/leakcheck.py build/site`). Stop on a failure and show it, so the repository never gets a workflow that fails on every push.
-9. **Set up**: follow create section 9 step 2 with two differences: render the workflow to `<git root>/.github/workflows/guide-pages.yml`, with `{{GUIDE_DIR}}` set to the guide's path inside the repository, and commit from the git root. `gh api -X POST repos/<owner>/<repo>/pages -f build_type=workflow` runs only after the author approves.
-10. **Report** as create section 9 step 6 does for Pages (URL, the enable command when Pages was not switched on, the visibility note for a private repository). Ask before pushing; push only after approval.
+9. **Set up**: follow create section 9 step 2 with these differences: render the workflow to `<git root>/.github/workflows/guide-pages.yml`, with `{{GUIDE_DIR}}` set to the guide's path inside the repository and `{{BRANCH}}` set to the default branch from step 6, and commit from the git root. `gh api -X POST repos/<owner>/<repo>/pages -f build_type=workflow` runs only after the author approves.
+10. **Report** as create section 9 step 6 does for Pages (URL, the enable command when Pages was not switched on, the visibility note for a private repository, and the branch that publishes). Ask before pushing; push only after approval.
 
 ## 4. Drift and impact (FR-025 to FR-027, FR-005a)
 

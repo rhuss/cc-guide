@@ -121,6 +121,45 @@ def test_non_git_guide_uses_site_yml(tmp_path):
     assert playbook.path(tmp_path, internal=False) == tmp_path / "site.yml"
 
 
+def fake_git(tmp_path, monkeypatch, old: bool) -> None:
+    """Put a git first on PATH: none at all, or one behaving like git before 2.31, which
+    echoes the unknown option --path-format=absolute instead of rejecting it."""
+    import shutil
+    real = shutil.which("git")
+    bin_dir = tmp_path / "fake-bin"
+    bin_dir.mkdir()
+    if old:
+        (bin_dir / "git").write_text(
+            "#!/bin/bash\nargs=()\nfor a in \"$@\"; do\n"
+            "  if [ \"$a\" = --path-format=absolute ]; then echo \"$a\"; else args+=(\"$a\"); fi\n"
+            f"done\nexec {real} \"${{args[@]}}\"\n")
+        (bin_dir / "git").chmod(0o755)
+        monkeypatch.setenv("PATH", f"{bin_dir}:/usr/bin:/bin")
+    else:
+        monkeypatch.setenv("PATH", str(bin_dir))
+
+
+def test_old_git_main_checkout_still_uses_site_yml(repo, tmp_path, monkeypatch):
+    fake_git(tmp_path, monkeypatch, old=True)
+    assert not playbook.is_linked_worktree(repo)
+    assert playbook.path(repo, internal=False) == repo / "site.yml"
+
+
+def test_old_git_linked_worktree(repo, tmp_path, monkeypatch):
+    wt = repo / ".claude" / "worktrees" / "003-old"
+    git("worktree", "add", "-q", "-b", "003-old", str(wt), cwd=repo)
+    fake_git(tmp_path, monkeypatch, old=True)
+    assert playbook.is_linked_worktree(wt)
+    (src,) = yaml.safe_load(playbook.path(wt, internal=False).read_text())["content"]["sources"]
+    assert Path(src["url"]).resolve() == repo.resolve()
+
+
+def test_missing_git_binary(repo, tmp_path, monkeypatch):
+    fake_git(tmp_path, monkeypatch, old=False)
+    assert not playbook.is_linked_worktree(repo)
+    assert playbook.path(repo, internal=False) == repo / "site.yml"
+
+
 def test_remote_ui_bundle_kept(repo):
     wt = repo / ".claude" / "worktrees" / "002-x"
     git("worktree", "add", "-q", "-b", "002-x", str(wt), cwd=repo)
