@@ -61,7 +61,8 @@ jobs:
 
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: build/site
+          # Relative to the repository root, unlike the run steps above.
+          path: {{GUIDE_DIR}}/build/site
 
   deploy:
     needs: build

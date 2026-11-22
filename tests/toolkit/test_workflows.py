@@ -59,7 +59,7 @@ def test_pages_workflow():
     leak = next(i for i, r in enumerate(runs) if "leakcheck.py build/site" in r)
     upload = next(i for i, s in enumerate(steps) if s.get("uses", "").startswith("actions/upload-pages-artifact"))
     assert site < leak < upload
-    assert steps[upload]["with"]["path"] == "build/site"
+    assert steps[upload]["with"]["path"] == "./build/site"
     assert not any(s.get("continue-on-error") for s in steps)
     deploy = data["jobs"]["deploy"]
     assert deploy["needs"] == "build" and deploy["environment"]["name"] == "github-pages"
@@ -70,6 +70,14 @@ def test_pages_workflow():
     assert "secrets." not in text and "site-internal" not in text and "fetch-baseline" not in text
     assert chr(0x2014) not in text and chr(0x2013) not in text
 
+
+
+def test_pages_workflow_for_a_guide_in_a_subdirectory():
+    data = render("guide-pages.yml", "docs/guide")
+    assert data["defaults"] == {"run": {"working-directory": "docs/guide"}}
+    upload = next(s for s in data["jobs"]["build"]["steps"]
+                  if s.get("uses", "").startswith("actions/upload-pages-artifact"))
+    assert upload["with"]["path"] == "docs/guide/build/site"
 
 SKILL = Path(__file__).resolve().parents[2] / "guide" / "skills" / "create" / "SKILL.md"
 
