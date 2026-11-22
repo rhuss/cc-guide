@@ -104,7 +104,7 @@ mkdir -p "$tools"
 rsync -a --delete --exclude '__pycache__' --exclude '.pytest_cache' "$plugin/toolkit/" "$tools/"
 cp "$adapter/adapter.yaml" "$tools/adapter.yaml"
 mkdir -p "$tools/templates"
-for t in run-summary.md upstream-issue.md; do
+for t in run-summary.md upstream-issue.md visuals.yaml; do
   cp "$plugin/templates/$t" "$tools/templates/$t"
 done
 cp "$plugin/validate/readonly.yaml" "$tools/readonly.yaml" 2>/dev/null || true

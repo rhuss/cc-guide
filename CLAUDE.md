@@ -16,6 +16,7 @@ This repository holds the Claude Code plugin `guide` (in `guide/`), its tests (`
 ## Layout
 
 - `guide/toolkit/`: format-neutral Python (PEP 723, run with `uv run`) and Node scripts. Create copies it into each guide project as `tools/guide/`, so it must not import anything from outside its own directory.
+- `guide/toolkit/capture/`: the build context of the capture environment for captured visuals (specs/008): `Containerfile` (pinned base image digest, uv, fonts), the container-side `runner.py`, `web.py` (Playwright), `render_cli.py` (pyte to SVG), `redact.py` (also imported by the host scripts), and the font licenses. Its file hash is the capture environment version, so any change there marks every captured visual stale. `guide/toolkit/visuals.py` is the host orchestrator (the only code that runs podman); `visualcfg.py` holds the recipe model, fingerprints, and sidecars shared with `check.py` and `drift.py`.
 - `guide/adapters/<format>/`: `adapter.yaml` plus the scaffold copied into a new guide project, and an optional `branding/` directory (Antora: logo template, UI bundle contract, MPL-2.0 notice, and the vendored Red Hat fonts in `fonts/` with their OFL license and manifest) that the scaffold script vendors to `tools/guide/branding/`. `fonts/update-fonts.py` is a maintainer tool that stays in the plugin.
 - `guide/skills/`, `guide/commands/`: the plugin behavior. Commands are thin wrappers around the skill of the same name.
 - `tests/toolkit/`: pytest for the toolkit. `tests/adapters/`: shell smoke tests per format. `tests/manual/`: recorded quickstart runs.
@@ -25,6 +26,6 @@ This repository holds the Claude Code plugin `guide` (in `guide/`), its tests (`
 ```bash
 make validate        # claude plugin validate on the marketplace and the plugin
 make test            # pytest for the toolkit
-make test-adapters   # adapter smoke tests (needs node, npx, uv, pandoc, Playwright Chromium)
+make test-adapters   # adapter smoke tests (needs node, npx, uv, pandoc, Playwright Chromium; test_visuals.sh needs podman and skips without it)
 make install         # install the plugin from this checkout
 ```

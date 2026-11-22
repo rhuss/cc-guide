@@ -15,7 +15,11 @@
 #
 # Prints JSON:
 #   {harness, superpowers, superpowers_version, multi_agent, prose, excalidraw,
-#    excalidraw_allowed, excalidraw_allowed_in}
+#    excalidraw_allowed, excalidraw_allowed_in, podman}
+#
+# podman is true when `podman info` succeeds, so captured visuals (make visuals) can run
+# (specs/008-captured-visuals FR-031a). It is optional and never fails the preflight.
+# CC_GUIDE_PODMAN names another podman binary (tests use it).
 #
 # excalidraw_allowed / excalidraw_allowed_in are the Claude-only settings/permission
 # wiring (FR-010). They are computed ONLY when harness == claude, from the settings
@@ -117,20 +121,27 @@ PY
   fi
 fi
 
+# Captured visuals need a podman that can run containers; absence is never an error.
+podman=false
+if "${CC_GUIDE_PODMAN:-podman}" info >/dev/null 2>&1; then
+  podman=true
+fi
+
 if [[ -z "${CC_GUIDE_NO_JQ:-}" ]] && command -v jq >/dev/null 2>&1; then
   jq -n --arg harness "$harness" --argjson sp "$superpowers" --arg spv "$superpowers_version" \
     --argjson ma "$multi_agent" --argjson prose "$prose" --argjson ex "$excalidraw" \
+    --argjson podman "$podman" \
     '{harness: $harness, superpowers: $sp,
       superpowers_version: (if $spv == "" then null else $spv end),
       multi_agent: $ma, prose: $prose, excalidraw: $ex,
       excalidraw_allowed: ($ARGS.positional | length > 0),
-      excalidraw_allowed_in: $ARGS.positional}' \
+      excalidraw_allowed_in: $ARGS.positional, podman: $podman}' \
     --args ${found[@]+"${found[@]}"}
 else
-  python3 -I - "$harness" "$superpowers" "$superpowers_version" "$multi_agent" "$prose" "$excalidraw" ${found[@]+"${found[@]}"} <<'PY'
+  python3 -I - "$harness" "$superpowers" "$superpowers_version" "$multi_agent" "$prose" "$excalidraw" "$podman" ${found[@]+"${found[@]}"} <<'PY'
 import json, sys
-harness, sp, spv, ma, prose, ex = sys.argv[1:7]
-found = sys.argv[7:]
+harness, sp, spv, ma, prose, ex, podman = sys.argv[1:8]
+found = sys.argv[8:]
 print(json.dumps({
     "harness": harness,
     "superpowers": sp == "true",
@@ -140,6 +151,7 @@ print(json.dumps({
     "excalidraw": ex == "true",
     "excalidraw_allowed": bool(found),
     "excalidraw_allowed_in": found,
+    "podman": podman == "true",
 }, indent=2))
 PY
 fi

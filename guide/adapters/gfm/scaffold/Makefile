@@ -42,7 +42,7 @@ STAGE = front=$$($(GET) embedded.front_page) || exit 1; docs=docs; \
 REGION_DIRS = dirs=docs; if [ -d internal ]; then dirs="docs internal"; fi; \
 	front=$$($(GET) embedded.front_page 2>/dev/null); if [ -n "$$front" ]; then dirs="$$dirs $$front"; fi
 
-.PHONY: help doctor fetch-baseline regions site site-internal check check-publish publish preview pdf print-pdf dist drift clean
+.PHONY: help doctor fetch-baseline regions site site-internal check check-publish publish preview pdf print-pdf dist drift visuals visuals-drift clean
 
 help:
 	@echo "Guide targets (GitHub Markdown adapter):"
@@ -58,6 +58,8 @@ help:
 	@echo "  make pdf             one PDF of the guide (VIEW=internal for the internal view)"
 	@echo "  make dist            check, then the PDF(s) and the shareable tarball (and the internal ones when enabled)"
 	@echo "  make drift           compare the baseline with the sources (exit 10 on drift)"
+	@echo "  make visuals         capture all visuals from visuals.yaml (VISUALS=<names> for some; needs podman)"
+	@echo "  make visuals-drift   recapture into .guide/visuals/ and compare (fails on drift; run uv run tools/guide/visuals.py drift for the exact status (0, 10, 2))"
 
 node_modules:
 	npm install
@@ -155,6 +157,13 @@ dist: check
 
 drift:
 	$(UV) run --quiet $(TOOLS)/drift.py --check
+
+# Captured visuals (specs/008-captured-visuals FR-035). podman is optional for every other target.
+visuals:
+	$(UV) run --quiet $(TOOLS)/visuals.py capture $(VISUALS)
+
+visuals-drift:
+	$(UV) run --quiet $(TOOLS)/visuals.py drift $(VISUALS)
 
 clean:
 	rm -rf build dist

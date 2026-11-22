@@ -22,7 +22,7 @@ BUILD = attrs=$$($(UV) run --quiet $(TOOLS)/attrs.py export --format antora) || 
 PDF_OUT = slug=$$($(GET) slug) && date=$$($(GET) baseline.captured) || exit 1; \
 	if [ "$(1)" = internal ]; then out=dist/$$slug-$$date-INTERNAL.pdf; else out=dist/$$slug-$$date.pdf; fi
 
-.PHONY: help doctor fetch-baseline site site-internal check preview pdf print-pdf dist drift clean
+.PHONY: help doctor fetch-baseline site site-internal check preview pdf print-pdf dist drift visuals visuals-drift clean
 
 help:
 	@echo "Guide targets (Antora adapter):"
@@ -35,6 +35,8 @@ help:
 	@echo "  make pdf             one PDF of the guide (VIEW=internal for the internal view)"
 	@echo "  make dist            tarballs and PDFs (shareable, plus internal when enabled)"
 	@echo "  make drift           compare the baseline with the sources (exit 10 on drift)"
+	@echo "  make visuals         capture all visuals from visuals.yaml (VISUALS=<names> for some; needs podman)"
+	@echo "  make visuals-drift   recapture into .guide/visuals/ and compare (fails on drift; run uv run tools/guide/visuals.py drift for the exact status (0, 10, 2))"
 
 node_modules:
 	npm install
@@ -108,6 +110,13 @@ dist: check
 
 drift:
 	$(UV) run --quiet $(TOOLS)/drift.py --check
+
+# Captured visuals (specs/008-captured-visuals FR-035). podman is optional for every other target.
+visuals:
+	$(UV) run --quiet $(TOOLS)/visuals.py capture $(VISUALS)
+
+visuals-drift:
+	$(UV) run --quiet $(TOOLS)/visuals.py drift $(VISUALS)
 
 clean:
 	rm -rf build dist

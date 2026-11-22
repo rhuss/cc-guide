@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Demo runs</title>
+<style>
+  body { font-family: "DejaVu Sans", sans-serif; margin: 32px; color: #1d1d1d; background: #ffffff; }
+  table { border-collapse: collapse; margin-top: 16px; }
+  th, td { border: 1px solid #c8c8c8; padding: 6px 14px; text-align: left; }
+  th { background: #f2f2f2; }
+  @media (prefers-color-scheme: dark) {
+    body { color: #e8e8e8; background: #1e1e1e; }
+    th { background: #333333; }
+  }
+</style>
+</head>
+<body>
+<h1>Demo experiment</h1>
+<p>Fictional training runs, last updated 2025-03-04.</p>
+<table>
+  <caption title="token=abcdefghijklmnop1234">Runs in <span>/home/</span><b>@@USER@@</b>/runs on @@HOST@@
+    <input aria-label="data path" value="@@HOME@@/data"></caption>
+  <thead>
+    <tr><th scope="col">run</th><th scope="col">accuracy</th><th scope="col">loss</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>baseline</td><td>0.912</td><td>0.231</td></tr>
+    <tr><td>wider-net</td><td>0.934</td><td>0.198</td></tr>
+    <tr><td>longer-training</td><td>0.941</td><td>0.187</td></tr>
+  </tbody>
+</table>
+</body>
+</html>

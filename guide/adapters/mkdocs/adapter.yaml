@@ -13,12 +13,22 @@ requires:
   mkdocs: ">=1.6"
   playwright-chromium: "*"
 
+# Optional tools: missing ones are warnings in make doctor, never failures.
+# podman runs the capture environment of `make visuals` and `make visuals-drift`
+# (specs/008-captured-visuals FR-035); building, checking, and exporting never need it.
+optional:
+  podman: "*"
+
 # Shareable pages live under docs/; the internal part is docs/internal/, excluded from
 # the shareable build (mkdocs.yml exclude_docs) and included by mkdocs-internal.yml.
 content_root: docs
 internal_root: docs/internal
 page_glob: "**/*.md"
 image_dir: docs/assets/diagrams
+# Captured visuals (specs/008-captured-visuals FR-015): images written by
+# `make visuals`, named after the visual. Their sidecars live in the guide's visuals/
+# directory, outside every published content directory.
+visual_dir: docs/assets/visuals
 
 # Source blocks and expectations are HTML comments (<!-- Sources: ... -->, <!-- expect: ... -->).
 comment: html

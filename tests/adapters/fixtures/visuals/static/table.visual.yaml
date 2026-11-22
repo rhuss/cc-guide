@@ -1,0 +1,67 @@
+schema: 1
+name: table
+variant: default
+kind: web
+image: docs/assets/visuals/table.png
+environment:
+  name: site
+  image: docker.io/library/nginx:1.27-alpine
+  digest: sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10
+  platform: linux/arm64
+fingerprint: 795c764117dbf96d
+capture_env: 4278a241e451
+captured_at: '2026-11-22T16:41:29Z'
+redaction:
+  rules:
+  - home-path
+  - user-path
+  - user-at
+  - k8s-api
+  - hostname
+  - ipv4
+  - jwt
+  - bearer
+  - api-key
+  - private-key
+  disabled: []
+  replacements:
+    home-path: 1
+    user-path: 1
+    user-at: 0
+    k8s-api: 0
+    hostname: 1
+    ipv4: 0
+    jwt: 0
+    bearer: 0
+    api-key: 2
+    private-key: 0
+masks: 2
+scripts: []
+highlights:
+- label: '1'
+  selector: role=columnheader[name=accuracy]
+  text: accuracy
+style: null
+text: |-
+  - table "Runs in /home/user/runs on example-host /home/user/data":
+    - caption:
+      - text: Runs in /home/user/runs on example-host
+      - textbox "data path": /home/user/data
+    - rowgroup:
+      - row "run accuracy loss":
+        - columnheader "run"
+        - columnheader "accuracy"
+        - columnheader "loss"
+    - rowgroup:
+      - row "baseline 0.912 0.231":
+        - cell "baseline"
+        - cell "0.912"
+        - cell "0.231"
+      - row "wider-net 0.934 0.198":
+        - cell "wider-net"
+        - cell "0.934"
+        - cell "0.198"
+      - row "longer-training 0.941 0.187":
+        - cell "longer-training"
+        - cell "0.941"
+        - cell "0.187"

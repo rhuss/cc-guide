@@ -1,0 +1,36 @@
+# Recipe of the captured visuals smoke test (tests/adapters/test_visuals.sh).
+# The script copies it and visuals/ into a scratch gfm guide and replaces the @@HOME@@,
+# @@USER@@, and @@HOST@@ placeholders in visuals/demo/colors.sh and visuals/seed/index.html
+# with the machine's real values, so the default redaction rules run against the values
+# they resolve to while this committed fixture holds no host values.
+schema: 1
+
+environments:
+  shell:
+    kind: cli
+    image: docker.io/library/alpine:3.20
+  site:
+    kind: web
+    image: docker.io/library/nginx:1.27-alpine
+    port: 80
+    seed:
+      - run: cp /visuals/seed/index.html /usr/share/nginx/html/index.html
+        files: [seed/index.html]
+
+visuals:
+  colors:
+    kind: cli
+    env: shell
+    command: sh /visuals/demo/colors.sh
+    width: 80
+  table:
+    kind: web
+    env: site
+    steps:
+      - goto: /
+      - wait: "role=table"
+      - highlight: {selector: "role=columnheader[name=accuracy]", label: "1"}
+      - crop: "role=table"
+    masks:
+      - pattern: "\\d{4}-\\d{2}-\\d{2}"
+        replacement: "2026-01-01"

@@ -27,7 +27,7 @@ PRINT_ARGS = --page-heading 'section.print-page[id]:not(.md-section) > h1' \
 # MkDocs Material 9.7 prints a banner about MkDocs 2.0 on every build; the pins keep 1.6.
 export NO_MKDOCS_2_WARNING := true
 
-.PHONY: help doctor fetch-baseline site site-internal check preview pdf print-pdf dist drift clean
+.PHONY: help doctor fetch-baseline site site-internal check preview pdf print-pdf dist drift visuals visuals-drift clean
 
 help:
 	@echo "Guide targets (MkDocs Material adapter):"
@@ -40,6 +40,8 @@ help:
 	@echo "  make pdf             one PDF of the guide (VIEW=internal for the internal view)"
 	@echo "  make dist            check, then the PDF(s) and the shareable tarball (and the internal ones when enabled)"
 	@echo "  make drift           compare the baseline with the sources (exit 10 on drift)"
+	@echo "  make visuals         capture all visuals from visuals.yaml (VISUALS=<names> for some; needs podman)"
+	@echo "  make visuals-drift   recapture into .guide/visuals/ and compare (fails on drift; run uv run tools/guide/visuals.py drift for the exact status (0, 10, 2))"
 
 node_modules:
 	npm install
@@ -111,6 +113,13 @@ dist: check
 
 drift:
 	$(UV) run --quiet $(TOOLS)/drift.py --check
+
+# Captured visuals (specs/008-captured-visuals FR-035). podman is optional for every other target.
+visuals:
+	$(UV) run --quiet $(TOOLS)/visuals.py capture $(VISUALS)
+
+visuals-drift:
+	$(UV) run --quiet $(TOOLS)/visuals.py drift $(VISUALS)
 
 clean:
 	rm -rf build dist

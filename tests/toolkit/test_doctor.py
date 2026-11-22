@@ -182,3 +182,57 @@ def test_cli_exit_codes(fake_env):
                            "--adapter", str(root / "tools/guide/adapter.yaml")],
                           capture_output=True, text=True, env=env)
     assert proc.returncode == 1 and "ok   node" in proc.stdout
+
+
+def guide_with_optional(root: Path, requires: str, optional: str) -> Path:
+    tools = root / "guide" / "tools" / "guide"
+    tools.mkdir(parents=True)
+    (tools / "adapter.yaml").write_text("format: gfm\nrequires:\n" + requires + "optional:\n" + optional)
+    return root / "guide"
+
+
+def test_optional_podman_missing_is_warning(fake_env):
+    """podman absent from PATH: the built-in check fails, doctor warns and passes."""
+    root = guide_with_optional(fake_env, '  uv: "*"\n', '  podman: "*"\n')
+    results = {r.tool: r for r in doctor.check(root)}
+    assert results["uv"].status == "ok"
+    podman = results["podman"]
+    assert podman.status == "warn"
+    assert "optional, needed for make visuals and make visuals-drift" in podman.line()
+    assert "podman.io/docs/installation" in podman.line()
+    assert doctor.main(["--root", str(root)]) == 0
+
+
+def test_optional_podman_present(fake_env):
+    stub(fake_env / "bin", "podman", "#!/bin/bash\necho 'podman version 6.2.0'\n")
+    root = guide_with_optional(fake_env, '  uv: "*"\n', '  podman: "*"\n')
+    results = {r.tool: r for r in doctor.check(root)}
+    assert results["podman"].status == "ok" and results["podman"].version == "6.2.0"
+
+
+def test_optional_old_or_error_is_warning(fake_env):
+    stub(fake_env / "bin", "podman", "#!/bin/bash\necho 'podman version 4.1.0'\n")
+    root = guide_with_optional(fake_env, '  uv: "*"\n', '  podman: ">=5"\n  frob: "*"\n')
+    results = {r.tool: r for r in doctor.check(root)}
+    assert results["podman"].status == "warn" and "need >=5" in results["podman"].message
+    assert results["frob"].status == "warn"
+    assert doctor.main(["--root", str(root)]) == 0
+
+
+def test_optional_does_not_mask_required_failure(fake_env, capsys):
+    root = guide_with_optional(fake_env, '  gh: "*"\n', '  podman: "*"\n')
+    assert doctor.main(["--root", str(root)]) == 1
+    out = capsys.readouterr().out
+    assert "MISSING gh" in out and "WARN podman" in out
+
+
+def test_adapters_declare_podman_optional_and_visual_dir():
+    import yaml
+    adapters = TOOLKIT.parent / "adapters"
+    expected = {"antora": "content/modules/ROOT/images/visuals",
+                "mkdocs": "docs/assets/visuals", "gfm": "docs/assets/visuals"}
+    for fmt, vdir in expected.items():
+        data = yaml.safe_load((adapters / fmt / "adapter.yaml").read_text())
+        assert data["optional"] == {"podman": "*"}
+        assert "podman" not in data["requires"]
+        assert data["visual_dir"] == vdir

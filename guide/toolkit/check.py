@@ -26,6 +26,16 @@ or a stub), resolve in the host repository whether or not .guide/cache exists, a
 warn when the baseline has no fingerprint for them; the developer README's relative
 links must resolve (no page rules apply to it); --structure reads the section titles
 from the front page.
+Captured visuals (specs/008-captured-visuals, rule `visuals`, FR-023, FR-024): without
+starting anything or needing podman, errors for an embedded image under the adapter's
+visual_dir that no recipe declares, a declared visual whose image or sidecar is missing
+(unless the sidecar records a skipped dark variant or a placeholder), a sidecar without a
+redaction record, a `visual:` citation of an undeclared visual, a page that embeds a
+visual without citing `visual:<name>`, confidential terms or patterns in a sidecar's
+text, and a visuals.yaml that fails its schema check; warnings (never failing, also
+under STRICT=1) for placeholders, stale visuals (recipe fingerprint changed), and
+visuals captured before the last rebaseline of their environment's source. The dash
+rule skips the visual directory: generated images keep tool output verbatim.
 Per-guide rules come from the optional guide-rules.yaml:
 
   rules:
@@ -54,6 +64,7 @@ import branding
 import guidecfg
 import region
 import sources
+import visualcfg
 
 DASH_RE = re.compile("[" + chr(0x2013) + chr(0x2014) + "]")
 TEXT_SUFFIXES = {".adoc", ".asciidoc", ".md", ".markdown", ".yml", ".yaml", ".txt", ".csv",
@@ -87,6 +98,8 @@ STUB_HTML_RE = re.compile(r"^<!--\s*STUB\b.*-->\s*$")
 # path (not the STUB marker of an unfinished page).
 STUB_MARKER = "<!-- guide: moved -->"
 REGION_RE = re.compile(r"(<!--\s*guide:attr\s+[^\s>]+\s*-->).*?(<!--\s*/guide:attr\s*-->)")
+# Image embeds that can show a captured visual: Markdown images and <img src>.
+MD_IMAGE_RE = re.compile(r"!\[[^\]]*\]\(\s*<?([^)\s>]+)>?(?:\s+\"[^\"]*\")?\s*\)|<img\b[^>]*\bsrc=\"([^\"]+)\"", re.I)
 
 
 @dataclass
@@ -728,8 +741,27 @@ def check_stubs(root: Path, guide: guidecfg.Guide) -> list[Violation]:
     return out
 
 
+def placeholder_images(root: Path) -> set[Path]:
+    """Images of placeholder visuals (FR-031a): declared, not captured yet, not a broken link."""
+    try:
+        recipe = visualcfg.load_recipe(root)
+    except visualcfg.RecipeError:
+        return set()
+    if recipe is None:
+        return set()
+    images = set()
+    visual_root = (Path(root) / visualcfg.visual_dir(root)).resolve()
+    for v in recipe.visuals.values():
+        for _variant, stem in v.outputs():
+            side = visualcfg.load_sidecar_safe(visualcfg.sidecar_path(root, stem))
+            if side and side.get("placeholder"):
+                images.add(visual_root / f"{stem}.{v.extension}")
+    return images
+
+
 def _md_link_rules(rel: str, page: Path, lines: list[str], fenced: list[bool],
-                   internal: bool, internal_dir: Path, out: list[Violation]) -> None:
+                   internal: bool, internal_dir: Path, out: list[Violation],
+                   placeholders: set[Path] | frozenset = frozenset()) -> None:
     """internal-link and broken-link over the whole text of a Markdown page.
 
     Used for a front page that carries the region markers: its other rules narrow to
@@ -746,8 +778,164 @@ def _md_link_rules(rel: str, page: Path, lines: list[str], fenced: list[bool],
             resolved = (page.parent / target).resolve()
             if not internal and (resolved == internal_dir or internal_dir in resolved.parents):
                 out.append(Violation(rel, n, "internal-link", f"{target} links into the internal part"))
-            elif not resolved.exists():
+            elif not resolved.exists() and resolved not in placeholders:
                 out.append(Violation(rel, n, "broken-link", f"{target} does not exist"))
+
+
+def _visual_embeds(page: Path, lines: list[str], root: Path, adapter: guidecfg.Adapter,
+                   visual_root: Path) -> list[tuple[int, str, Path]]:
+    """(line, output name, image path) of every image the page embeds from the visual directory."""
+    is_adoc = page.suffix in (".adoc", ".asciidoc")
+    skip = _verbatim_mask(lines) if is_adoc else _md_fence_mask(lines)
+    found = []
+    for n, line in enumerate(lines, 1):
+        if skip[n - 1] or (is_adoc and line.lstrip().startswith("//")):
+            continue
+        if is_adoc:
+            targets = [m.group(1) for m in IMAGE_RE.finditer(line)]
+        else:
+            targets = [m.group(1) or m.group(2) for m in MD_IMAGE_RE.finditer(CODE_SPAN_RE.sub("", line))]
+        for target in targets:
+            target = target.split("#", 1)[0].split("?", 1)[0]
+            if not target or SCHEME_RE.match(target) and not re.match(r"^[A-Za-z0-9_-]+:[^/]", target):
+                continue
+            if is_adoc:
+                rel = target.split(":", 1)[1] if re.match(r"^[A-Za-z0-9_-]+:", target) else target
+                images = root / adapter.image_dir if adapter.image_dir else visual_root.parent
+                path = (images / rel).resolve()
+            else:
+                path = (page.parent / target).resolve()
+            if path.parent == visual_root:
+                found.append((n, path.stem, path))
+    return found
+
+
+def check_visuals(root: Path, guide: guidecfg.Guide, baseline: guidecfg.Baseline,
+                  adapter: guidecfg.Adapter, warnings: list[str]) -> list[Violation]:
+    """The `visuals` rule family (specs/008-captured-visuals FR-023); never needs podman (FR-024)."""
+    root = Path(root)
+    out: list[Violation] = []
+    rel_dir = visualcfg.visual_dir(root)
+    visual_root = (root / rel_dir).resolve()
+    try:
+        recipe = visualcfg.load_recipe(root)
+    except visualcfg.RecipeError as err:
+        out.append(Violation(visualcfg.RECIPE, 0, "visuals", str(err)))
+        recipe = None
+    if recipe is not None:
+        for problem in visualcfg.validate(root):
+            out.append(Violation(visualcfg.RECIPE, 0, "visuals", problem.split(": ", 1)[1]))
+
+    def resolve(name: str):
+        return recipe.resolve_ref(name) if recipe is not None else None
+
+    style = "line" if adapter.comment == "line" else "html"
+    front_res = guide.embedded.front_page.resolve() if guide.embedded is not None else None
+    embedded: set[str] = set()
+    for page in guidecfg.pages(root, adapter, "all"):
+        rel = _rel(page, root)
+        text = page.read_text(errors="replace")
+        offset = 0
+        if front_res is not None and page.resolve() == front_res:
+            # specs/006: only the guide region of a marked front page is guide text
+            try:
+                parsed = region.parse(text)
+            except region.RegionError:
+                continue   # reported by the page rules
+            if parsed.marked:
+                text, offset = parsed.content, parsed.begin_line
+        lines = text.splitlines()
+        block = sources.find_block(text, style)
+        cited = {r.visual: r for r in (block.refs if block else []) if r.kind == "visual"}
+        for name, ref in cited.items():
+            if resolve(name) is None:
+                out.append(Violation(rel, ref.line + offset, "visuals",
+                                     f"{ref.raw}: no visual {name!r} in visuals.yaml"))
+        for n, stem, path in _visual_embeds(page, lines, root, adapter, visual_root):
+            n += offset
+            target = resolve(stem)
+            shown = f"{rel_dir}/{path.name}"
+            if target is None:
+                out.append(Violation(rel, n, "visuals", f"{shown} is not produced by a recipe "
+                                                        f"(no visual {stem!r} in visuals.yaml)"))
+                continue
+            embedded.add(stem)
+            # the dark image needs visual:<name>-dark: visual:<name> names the light sidecar
+            if stem not in cited:
+                out.append(Violation(rel, n, "visuals", f"{shown} is embedded without citing visual:{stem} "
+                                                        "in the page's source block"))
+            problem = _visual_files_problem(root, recipe, stem, path)
+            if problem:
+                out.append(Violation(rel, n, "visuals", problem))
+    if recipe is None:
+        return out
+
+    terms = [(t, re.compile(re.escape(t), re.I)) for t in guide.confidential_terms]
+    patterns = [re.compile(p) for p in guide.confidential_patterns]
+    pins = {s.id: s.commit for s in baseline.sources}
+    capture_env = visualcfg.capture_env_version()
+    for v in recipe.visuals.values():
+        light = visualcfg.load_sidecar_safe(visualcfg.sidecar_path(root, v.name)) \
+            if "light" in v.variants else None
+        for variant, stem in v.outputs():
+            side_path = visualcfg.sidecar_path(root, stem)
+            side_rel = _rel(side_path, root)
+            if variant == "dark" and light and (light.get("variants") or {}).get("dark") == "skipped":
+                continue
+            image = root / rel_dir / f"{stem}.{v.extension}"
+            if stem not in embedded:
+                problem = _visual_files_problem(root, recipe, stem, image)
+                if problem:
+                    out.append(Violation(side_rel, 0, "visuals", problem))
+            try:
+                side = visualcfg.load_sidecar(side_path)
+            except visualcfg.RecipeError as err:
+                out.append(Violation(side_rel, 0, "visuals", str(err)))
+                continue
+            if side is None:
+                continue
+            if side.get("placeholder"):
+                warnings.append(f"{side_rel}: [visuals] warning: visual {stem!r} is a placeholder, not yet captured "
+                                "(run make visuals)")
+                continue
+            if not isinstance(side.get("redaction"), dict):
+                out.append(Violation(side_rel, 0, "visuals", f"visual {stem!r} is unredacted: its sidecar has no "
+                                                             "redaction record (capture it with make visuals)"))
+            text = str(side.get("text") or "")
+            for n, line in enumerate(text.splitlines(), 1):
+                for term, rx in terms:
+                    if rx.search(line):
+                        out.append(Violation(side_rel, 0, "visuals",
+                                             f"confidential term {term!r} in the sidecar text (line {n})"))
+                for rx in patterns:
+                    m = rx.search(line)
+                    if m:
+                        out.append(Violation(side_rel, 0, "visuals",
+                                             f"confidential pattern match {m.group(0)!r} in the sidecar text (line {n})"))
+            if side.get("fingerprint") != visualcfg.fingerprint(recipe, v.name, root, capture_env=capture_env):
+                warnings.append(f"{side_rel}: [visuals] warning: visual {stem!r} is stale: its recipe, seed data, "
+                                "or the capture environment changed since the capture (run make visuals)")
+            env = side.get("environment") if isinstance(side.get("environment"), dict) else {}
+            source, commit = env.get("source"), env.get("source_commit")
+            if source and commit and source in pins and pins[source] != commit:
+                warnings.append(f"{side_rel}: [visuals] warning: visual {stem!r} was captured at {source} "
+                                f"{str(commit)[:7]}, before the baseline pin {pins[source][:7]} (run make visuals)")
+    return out
+
+
+def _visual_files_problem(root: Path, recipe, stem: str, image: Path) -> str | None:
+    """Missing image or sidecar of a declared visual, None when both exist (or it is a placeholder)."""
+    if recipe is None:
+        return None
+    side_path = visualcfg.sidecar_path(root, stem)
+    side = visualcfg.load_sidecar_safe(side_path)
+    if side is None:
+        return f"visual {stem!r} has no sidecar {_rel(side_path, root)} (run make visuals)"
+    if side.get("placeholder"):
+        return None
+    if not image.is_file():
+        return f"visual {stem!r} has no image {_rel(image, root)} (run make visuals)"
+    return None
 
 
 def check_pages(root: Path, guide: guidecfg.Guide, baseline: guidecfg.Baseline,
@@ -775,6 +963,7 @@ def check_pages(root: Path, guide: guidecfg.Guide, baseline: guidecfg.Baseline,
     terms = [(t, re.compile(re.escape(t), re.I)) for t in guide.confidential_terms]
     patterns = [re.compile(p) for p in guide.confidential_patterns]
     diagrams = {p.stem for p in (root / "diagrams").glob("*.excalidraw")} if (root / "diagrams").is_dir() else set()
+    placeholders = placeholder_images(root)
     internal_dir = (root / adapter.internal_root).resolve()
     internal_modules: set[str] = set()
     if adapter.format == "antora":
@@ -880,7 +1069,7 @@ def check_pages(root: Path, guide: guidecfg.Guide, baseline: guidecfg.Baseline,
                     resolved = (page.parent / target).resolve()
                     if not internal and (resolved == internal_dir or internal_dir in resolved.parents):
                         continue  # reported as internal-link
-                    if not resolved.exists():
+                    if not resolved.exists() and resolved not in placeholders:
                         out.append(Violation(rel, n, "broken-link", f"{target} does not exist"))
             if is_adoc and not mask[n - 1] and not line.lstrip().startswith("//"):
                 for m in IMAGE_RE.finditer(line):
@@ -894,9 +1083,10 @@ def check_pages(root: Path, guide: guidecfg.Guide, baseline: guidecfg.Baseline,
         if whole is not None:
             # FR-008: the link rules of a marked front page read the whole file,
             # author text included, at file line numbers
-            _md_link_rules(rel, page, whole, _md_fence_mask(whole), internal, internal_dir, out)
+            _md_link_rules(rel, page, whole, _md_fence_mask(whole), internal, internal_dir, out, placeholders)
 
-    text_files = _text_files(root, adapter)
+    visual_root = (root / visualcfg.visual_dir(root)).resolve()
+    text_files = [f for f in _text_files(root, adapter) if visual_root not in f.resolve().parents]
     if guide.embedded is not None and guide.embedded.front_page.is_file():
         text_files.append(guide.embedded.front_page)
     for f in text_files:
@@ -918,6 +1108,7 @@ def check_pages(root: Path, guide: guidecfg.Guide, baseline: guidecfg.Baseline,
                 out.append(Violation(_rel(f, root), n + offset, "dash", "em dash or en dash character; rephrase"))
 
     out.extend(_check_rules(root))
+    out.extend(check_visuals(root, guide, baseline, adapter, warnings))
     out.extend(check_embedded(root, guide, baseline))
     out.extend(check_publish(root, guide))
     out.extend(check_stubs(root, guide))

@@ -145,3 +145,39 @@ Ideas captured from code reviews for future brainstorming.
 - **Summary**: Directories skipped as unreadable leave no trace in discovery's output, so a guide behind wrong permissions shows up as "no guide project".
 
 > A stderr line counting skipped directories would keep the stdout contract and give the author a hint.
+
+### run-recipe-temporal-coupling
+
+- **Source**: deep-review
+- **Date**: 2026-11-22
+- **Reference**: 008-captured-visuals
+- **Summary**: `Run.recipe` is assigned after construction and dereferenced by many methods; `execute` mixes capture outcomes and drift results through untyped lists.
+
+> Making the recipe a constructor argument and typing `execute` would turn a forgotten assignment into an immediate error instead of a failure after containers started.
+
+### capture-image-pruning
+
+- **Source**: deep-review
+- **Date**: 2026-11-22
+- **Reference**: 008-captured-visuals
+- **Summary**: Every toolkit update that changes `capture/` builds a new multi-GB capture image tag, and old tags are never removed.
+
+> A prune of unused `localhost/cc-guide-capture` tags after a successful build, or a documented prune command, would keep laptops and podman machines from filling up.
+
+### tool-container-hardening
+
+- **Source**: deep-review
+- **Date**: 2026-11-22
+- **Reference**: 008-captured-visuals
+- **Summary**: Tool and capture containers run with `label=disable`, without `--cap-drop=ALL` or `no-new-privileges`, and the capture container runs as root.
+
+> The tool images are the least trusted part of a run; tighter defaults (volume relabeling, dropped capabilities, a non-root capture user) would narrow what a hostile image can do.
+
+### affected-visuals-verdict
+
+- **Source**: deep-review
+- **Date**: 2026-11-22
+- **Reference**: 008-captured-visuals
+- **Summary**: The source drift report lists affected visuals for a moved source even when it says "No drift", and never for unchecked sources.
+
+> Deciding whether affected visuals count toward the drift verdict would make the scheduled source drift check point at visuals consistently.

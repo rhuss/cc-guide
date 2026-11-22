@@ -1,0 +1,84 @@
+# Capture recipe for captured visuals (cc-guide, specs/008-captured-visuals).
+#
+# `make visuals` (uv run tools/guide/visuals.py capture) starts the environments below in
+# throwaway podman containers on a network of their own, seeds them with fictional data,
+# replays every visual, redacts host values, and writes one image per visual into the
+# adapter's visual directory plus a text sidecar (<name>.visual.yaml) into visuals/.
+# `make visuals-drift` recaptures into .guide/visuals/ and compares; it never changes
+# committed files. `uv run tools/guide/visuals.py validate` checks this file without
+# starting anything. Unknown keys are errors.
+#
+# Pages cite every embedded visual in their source block as visual:<name>.
+schema: 1
+
+# defaults:                  # optional; values shown are the built-in defaults
+#   width: 100               # CLI terminal columns (20 to 300)
+#   prompt: "$ "             # prompt drawn before a CLI command
+#   viewport: {width: 1280, height: 800}   # browser viewport of web visuals
+#   timeout: 15              # seconds each web step may wait
+#   tolerance: 16            # per-channel pixel tolerance (0 to 255) for visual drift
+#   threshold: 0.5           # percent of differing pixels that counts as visual drift
+
+# redaction:                 # optional; extra rules on top of the default rules
+#   rules:                   # defaults: home-path, user-path, user-at, hostname, ipv4,
+#                            # bearer, api-key, jwt, k8s-api, private-key
+#     - id: tenant           # must not reuse a default rule id
+#       pattern: "acme-[0-9]+"           # regular expression
+#       replacement: "example-tenant"    # fixed replacement text
+
+# Environments: throwaway tool instances, one container each. The name (lower case
+# letters, digits, `-`, starting with a letter) is the container's host name on the run
+# network; every container gets GUIDE_ENV_<NAME>_URL with the base URL of each web
+# environment. Images must name a tag or digest (no tag and an explicit :latest are both
+# rejected). No port is published. The run network is internal: no container has
+# outbound network access, so seed steps cannot download anything; seed data comes from
+# the tool image or from committed files under visuals/.
+environments: {}
+#   mlflow:
+#     kind: web              # web | cli (kind-cluster is reserved, not supported yet)
+#     image: ghcr.io/mlflow/mlflow:v2.19.0
+#     source: mlflow         # optional baseline.yaml source id this tool belongs to
+#     port: 5000             # container port of the web UI
+#     command: ["mlflow", "server", "--host", "0.0.0.0", "--port", "5000"]
+#     env: {}                # optional environment variables of the container
+#     ready: /health         # path polled until it answers below 400 (default /)
+#     ready_timeout: 120     # seconds (default 120)
+#     seed:                  # runs after readiness, before the visuals; no network access
+#       - run: python /visuals/seed/runs.py   # visuals/ is mounted read-only at /visuals
+#         in: tool           # tool (default, inside this container) | capture
+#         files: [seed/runs.py]               # committed files under visuals/, fictional data only
+#   tools:
+#     kind: cli              # kept running for the length of the run
+#     image: ghcr.io/mlflow/mlflow:v2.19.0    # prefer an image that already contains the CLI
+
+# Visuals: one named capture each; the name (lower case letters, digits, `-`) names the
+# image (<name>.png for web, <name>.svg for cli) and the sidecar.
+visuals: {}
+#   mlflow-runs:
+#     kind: web
+#     env: mlflow            # a web environment
+#     viewport: {width: 1280, height: 800}    # optional override
+#     variants: [light, dark]                 # optional color scheme variants
+#     threshold: 0.5         # optional drift threshold override (percent)
+#     steps:                 # goto, click, fill, press, wait, highlight, crop, hide, script
+#       - goto: /#/experiments/1
+#       - wait: "role=table"                  # CSS, text=<text>, or role=<role>[name=<name>]
+#       - highlight: {selector: "role=columnheader[name=accuracy]", label: "1"}
+#       - crop: "role=table"                  # at most one crop
+#       # - click: "text=Runs"
+#       # - fill: {selector: "#search", text: "baseline"}
+#       # - press: Enter
+#       # - hide: ".banner"
+#       # - script: scripts/expand.py         # visuals/scripts/<file>.py with run(page, base_url)
+#     masks:                 # volatile values replaced with a fixed value in image and sidecar
+#       - pattern: "\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}"
+#         replacement: "2026-01-01 12:00:00"
+#     disable_redaction: []  # default rule ids to switch off for this visual
+#   mlflow-cli-runs:
+#     kind: cli
+#     env: tools             # a cli environment, or a web one (runs in the tool container)
+#     command: mlflow runs list --experiment-id 1
+#     exit: 0                # expected exit status (default 0)
+#     width: 100             # terminal columns
+#     prompt: "$ "           # displayed prompt
+#     env_vars: {MLFLOW_TRACKING_URI: "${GUIDE_ENV_MLFLOW_URL}"}

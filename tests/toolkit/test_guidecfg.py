@@ -1034,3 +1034,13 @@ def test_get_pages_keys(tmp_guide):
     g = guidecfg.load_guide(root)
     assert guidecfg.GET_KEYS["pages.enabled"](g) == "true"
     assert guidecfg.GET_KEYS["pages.url"](g) == "https://o.github.io/r/"
+
+
+def test_visual_source_id_reserved(render_fixture_guide):
+    """visual:<name> cites a captured visual, so no baseline source may be called visual (FR-026)."""
+    def add(d):
+        d["sources"].append(dict(d["sources"][0], id="visual"))
+    edit(render_fixture_guide / "baseline.yaml", add)
+    with pytest.raises(ConfigError) as err:
+        guidecfg.load_baseline(render_fixture_guide)
+    assert "the source id 'visual' is reserved for visual citations" in str(err.value) + " ".join(err.value.lines())

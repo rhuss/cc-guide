@@ -11,11 +11,21 @@ requires:
   antora: "~3.2.0"
   playwright-chromium: "*"
 
+# Optional tools: missing ones are warnings in make doctor, never failures.
+# podman runs the capture environment of `make visuals` and `make visuals-drift`
+# (specs/008-captured-visuals FR-035); building, checking, and exporting never need it.
+optional:
+  podman: "*"
+
 # Shareable and internal content roots, and the pages under them.
 content_root: content
 internal_root: internal
 page_glob: "modules/*/pages/**/*.adoc"
 image_dir: content/modules/ROOT/images
+# Captured visuals (specs/008-captured-visuals FR-015): images written by
+# `make visuals`, named after the visual. Their sidecars live in the guide's visuals/
+# directory, outside every published content directory.
+visual_dir: content/modules/ROOT/images/visuals
 
 # Source blocks and expectations are AsciiDoc line comments (// Sources:, // expect:).
 comment: line

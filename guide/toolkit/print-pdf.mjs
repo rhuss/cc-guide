@@ -243,6 +243,9 @@ function transformDocument(args) {
   doc.querySelectorAll('a[href]').forEach((a) => {
     const href = a.getAttribute('href');
     if (!href || href.startsWith('#') || /^[a-z][a-z0-9+.-]*:/i.test(href)) return;
+    // A link to an image file is a click-to-enlarge wrapper (MkDocs glightbox, gfm diagram
+    // and visual links), not a page link: the printed image stays, the link is dropped.
+    if (/\.(svg|png|jpe?g|gif|webp)([?#]|$)/i.test(href)) { a.removeAttribute('href'); return; }
     const [rawPath, frag] = href.split('#', 2);
     let key = decodeURIComponent(rawPath).replace(/^(\.\.?\/)+/, '').replace(/\/+$/, '/index');
     key = key.replace(/\.(html?|md|adoc)$/i, '').replace(/(^|\/)index$/, '').replace(/\/$/, '') || 'index';

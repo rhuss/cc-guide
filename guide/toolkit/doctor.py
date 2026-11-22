@@ -11,10 +11,14 @@ string, or to a mapping {version, command, hint}. Constraints: `*`,
 Known tools have a built-in check command and install hint; a mapping's
 `command` and `hint` override them.
 
+`optional` uses the same syntax for tools that only some targets need (podman for
+`make visuals` and `make visuals-drift`, specs/008-captured-visuals FR-035). A missing,
+outdated, or failing optional tool is reported with status `warn` and never fails doctor.
+
 Usage: uv run tools/guide/doctor.py [--root DIR] [--adapter FILE]
 --adapter reads the descriptor from FILE instead of <root>/tools/guide/adapter.yaml
 (create checks the plugin's adapter before it scaffolds the guide project).
-Prints one line per tool and exits 0 when everything is present, 1 otherwise.
+Prints one line per tool and exits 0 when every required tool is present, 1 otherwise.
 """
 from __future__ import annotations
 
@@ -31,6 +35,7 @@ import yaml
 VERSION_RE = re.compile(r"(\d+)\.(\d+)(?:\.(\d+))?")
 CHROMIUM_JS = "const p=require('playwright');process.stdout.write(p.chromium.executablePath())"
 TIMEOUT = 180
+OPTIONAL_NOTE = "optional, needed for make visuals and make visuals-drift"
 
 
 @dataclass
@@ -58,6 +63,10 @@ def builtin(name: str, root: Path) -> Tool | None:
         "markserv": (["npx", "--no-install", "markserv", "--version"], "run npm install in the guide project"),
         "playwright-chromium": (["npx", "--no-install", "playwright", "--version"],
                                 "npx playwright install chromium (after npm install)"),
+        # `podman info`, like preflight and visuals.py: a podman whose machine is stopped
+        # cannot run containers and must not count as available
+        "podman": (["podman", "info", "--format", "{{.Version.Version}}"],
+                   "install podman (podman.io/docs/installation); on macOS run podman machine start"),
     }
     if name not in table:
         return None
@@ -103,7 +112,7 @@ def satisfies(version: tuple[int, int, int], constraint: str) -> bool:
 @dataclass
 class Result:
     tool: str
-    status: str  # ok | missing | old | error
+    status: str  # ok | missing | old | error | warn (optional tool not usable)
     constraint: str = "*"
     version: str | None = None
     hint: str = ""
@@ -117,6 +126,9 @@ class Result:
             return f"MISSING {self.tool}{extra}: {self.hint}"
         if self.status == "old":
             return f"OLD  {self.tool} {self.version} (need {self.constraint}): {self.hint}"
+        if self.status == "warn":
+            detail = f" ({self.message})" if self.message else ""
+            return f"WARN {self.tool}{detail}: {OPTIONAL_NOTE}; {self.hint}"
         return f"ERROR {self.tool}: {self.message}"
 
 
@@ -183,7 +195,23 @@ def check(root: Path, adapter: Path | None = None) -> list[Result]:
     requires = data.get("requires") or {}
     if not isinstance(requires, dict):
         return [Result("adapter.yaml", "error", message="requires must be a mapping of tool to constraint")]
-    return [check_tool(str(name), spec, root) for name, spec in requires.items()]
+    optional = data.get("optional") or {}
+    if not isinstance(optional, dict):
+        return [Result("adapter.yaml", "error", message="optional must be a mapping of tool to constraint")]
+    results = [check_tool(str(name), spec, root) for name, spec in requires.items()]
+    results += [_as_optional(check_tool(str(name), spec, root)) for name, spec in optional.items()]
+    return results
+
+
+def _as_optional(result: Result) -> Result:
+    """Turn every non-ok result of an optional tool into a warning."""
+    if result.status == "ok":
+        return result
+    reason = {"missing": "missing", "old": f"version {result.version}, need {result.constraint}"}.get(
+        result.status, result.message)
+    if result.status == "missing" and result.message:
+        reason = f"missing, {result.message}"
+    return Result(result.tool, "warn", result.constraint, result.version, result.hint, reason)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -194,11 +222,13 @@ def main(argv: list[str] | None = None) -> int:
     results = check(args.root, args.adapter)
     for r in results:
         print(r.line())
-    failed = [r for r in results if r.status != "ok"]
+    failed = [r for r in results if r.status not in ("ok", "warn")]
+    warned = [r for r in results if r.status == "warn"]
+    note = f" ({len(warned)} optional not available)" if warned else ""
     if failed:
-        print(f"doctor: {len(failed)} of {len(results)} requirements not met")
+        print(f"doctor: {len(failed)} of {len(results) - len(warned)} requirements not met{note}")
         return 1
-    print(f"doctor: all {len(results)} requirements met")
+    print(f"doctor: all {len(results) - len(warned)} requirements met{note}")
     return 0
 
 

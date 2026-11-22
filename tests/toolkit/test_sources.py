@@ -178,3 +178,24 @@ def test_cli_check(cached):
                            "--style", "html", str(page)], capture_output=True, text=True)
     assert proc.returncode == 1
     assert "page.md:4:" in proc.stdout
+
+
+@pytest.mark.parametrize("name", ["mlflow-runs", "table", "table-dark", "a"])
+def test_visual_reference(name):
+    ref = sources.parse_ref(f"visual:{name}", line=4)
+    assert ref.kind == "visual" and ref.visual == name and ref.line == 4 and ref.raw == f"visual:{name}"
+    assert ref.source_id is None
+
+
+@pytest.mark.parametrize("bad", ["visual:", "visual:Table", "visual:1table", "visual:table_x", "visual:a/b",
+                                 "visual:" + "x" * 64])
+def test_visual_reference_rejects(bad):
+    with pytest.raises(sources.BlockError, match="visual reference"):
+        sources.parse_ref(bad)
+
+
+def test_visual_reference_in_block_resolves_without_baseline(tmp_path):
+    text = "# T\n\n<!-- Sources:\nvisual:table\n-->\n\nBody.\n"
+    (ref,) = sources.parse_block(text, "html")
+    assert ref.kind == "visual"
+    assert sources.resolve(ref, None, tmp_path / "cache").ok

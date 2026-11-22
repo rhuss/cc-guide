@@ -11,6 +11,11 @@ A source block sits directly after the page title (contracts/page-conventions.md
                             // mini:README.md:1-3                            mini:README.md:1-3
                                                                              -->
 Grammar per entry: <source-id>:<path>[:<lines>] | url:<absolute-url> | input:<input-id>
+                   | visual:<visual-name>
+A `visual:<name>` entry cites a captured visual (specs/008-captured-visuals FR-026): its
+sidecar in visuals/ is the source of what the page says about the image. The source id
+`visual` is reserved; check.py resolves the name against visuals.yaml (`<x>-dark` names
+the dark variant of visual `<x>`).
 
 Usage: uv run tools/guide/sources.py check [--root DIR] [--style line|html] PAGE...
 Exits 1 and prints `page:line: message` for every problem.
@@ -34,6 +39,7 @@ SOURCE_REF_RE = re.compile(r"^([a-z0-9][a-z0-9_-]*):([^:\s]+)(?::([0-9][0-9,-]*)
 RANGE_RE = re.compile(r"^(\d+)(?:-(\d+))?$")
 URL_RE = re.compile(r"^[a-z][a-z0-9+.-]*://\S+$")
 INPUT_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
+VISUAL_RE = re.compile(r"^[a-z][a-z0-9-]{0,62}(-dark)?$")
 ADOC_ATTR_RE = re.compile(r"^:[!\w][\w-]*!?:")
 NO_SOURCES_ADOC = ":guide-no-sources:"
 NO_SOURCES_MD = re.compile(r"^<!--\s*guide:\s*no-sources\s*-->$")
@@ -70,12 +76,13 @@ class BlockError(ValueError):
 
 @dataclass(frozen=True)
 class Ref:
-    kind: str  # "source" | "url" | "input"
+    kind: str  # "source" | "url" | "input" | "visual"
     source_id: str | None = None
     path: str | None = None
     ranges: tuple[tuple[int, int], ...] = ()
     url: str | None = None
     input_id: str | None = None
+    visual: str | None = None
     line: int = 0
     raw: str = ""
 
@@ -117,6 +124,11 @@ def parse_ref(text: str, line: int = 0) -> Ref:
         if not INPUT_RE.match(input_id):
             raise BlockError(f"bad input reference {raw!r} (expected input:<input-id>)")
         return Ref(kind="input", input_id=input_id, line=line, raw=raw)
+    if raw.startswith("visual:"):
+        name = raw[len("visual:"):]
+        if not VISUAL_RE.match(name):
+            raise BlockError(f"bad visual reference {raw!r} (expected visual:<visual-name>)")
+        return Ref(kind="visual", visual=name, line=line, raw=raw)
     m = SOURCE_REF_RE.match(raw)
     if not m:
         raise BlockError(f"bad source reference {raw!r} (expected <source-id>:<path>[:<lines>])")
@@ -344,6 +356,9 @@ def resolve(ref: Ref, baseline: guidecfg.Baseline, cache_dir: Path,
             inputs: guidecfg.Inputs | None = None) -> Resolution:
     """Check that a reference points at something that exists at the pinned commit."""
     if ref.kind == "url":
+        return Resolution(True)
+    if ref.kind == "visual":
+        # existence of the visual and its sidecar is checked by check.py (rule visuals)
         return Resolution(True)
     if ref.kind == "input":
         if inputs is None:

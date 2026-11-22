@@ -1,6 +1,7 @@
 """Workflow templates: guide-drift.yml and guide-pr-check.yml (specs/005-embedded-guide, T044)."""
 from pathlib import Path
 
+import pytest
 import yaml
 
 TEMPLATES = Path(__file__).resolve().parents[2] / "guide" / "templates"
@@ -117,14 +118,57 @@ def test_evolve_pages_mode():
                    "not a GitHub remote", "`make site` and the leak check",
                    "create section 9 step 2", "Toolkit 0.5.0 adds"):
         assert phrase in evolve, phrase
-    assert "without `--check` or `--pages`" in preflight
+    assert "without `--check`, `--pages`, or `--visuals`" in preflight
     assert "gh repo view --json visibility,defaultBranchRef" in evolve
     assert "`{{BRANCH}}` set to the default branch" in evolve
-    section = evolve.split("## 3a.")[1].split("## 4.")[0]
+    section = evolve.split("## 3a.")[1].split("## 3b.")[0]
     order = [section.index(f"**{step}**") for step in
              ("Format", "Repository", "Existing workflow", "Remote", "Existing Pages site",
               "Visibility and branch", "Toolkit", "Build check", "Set up", "Report")]
     assert order == sorted(order), order          # every read-only refusal before the first commit
-    assert (GUIDE / "toolkit" / "VERSION").read_text().strip() == "0.5.0"
+    assert (GUIDE / "toolkit" / "VERSION").read_text().strip() == "0.6.0"   # 0.6.0: captured visuals
     for text in (evolve, command, preflight):
         assert chr(0x2014) not in text and chr(0x2013) not in text
+
+
+@pytest.mark.parametrize("guide_dir", [".", "guide"])
+def test_visuals_workflow(guide_dir):
+    """specs/008-captured-visuals FR-036: schedule and dispatch, read-only, no secrets, drift only."""
+    data = render("guide-visuals.yml", guide_dir)
+    text = (TEMPLATES / "guide-visuals.yml").read_text()
+    assert "{{GUIDE_DIR}}" in text
+    assert set(data["on"]) == {"schedule", "workflow_dispatch"}
+    assert data["permissions"] == {"contents": "read"}
+    assert data["defaults"] == {"run": {"working-directory": guide_dir}}
+    job = data["jobs"]["visuals"]
+    assert job["runs-on"] == "ubuntu-latest"
+    checkout = next(s for s in job["steps"] if s.get("uses", "").startswith("actions/checkout"))
+    assert checkout["with"] == {"persist-credentials": False}
+    runs = [s["run"] for s in job["steps"] if "run" in s]
+    assert len(runs) == 1
+    assert "uv run tools/guide/visuals.py drift --format markdown" in runs[0]
+    assert '"$GITHUB_STEP_SUMMARY"' in runs[0] and "exit $status" in runs[0]
+    assert job["timeout-minutes"] == 60
+    upload = next(s for s in job["steps"] if s.get("uses", "").startswith("actions/upload-artifact"))
+    assert upload["if"] == "always()" and upload["with"]["include-hidden-files"] is True
+    assert f"{guide_dir}/.guide/visuals/*/debug/" in upload["with"]["path"]
+    assert "visuals.py capture" not in text and "git push" not in text
+    assert "secrets." not in text
+    assert "docker" not in text.lower()
+    assert chr(0x2014) not in text and chr(0x2013) not in text
+
+
+def test_visuals_workflow_offered_by_create_and_evolve():
+    create = (GUIDE / "skills" / "create" / "SKILL.md").read_text()
+    evolve = (GUIDE / "skills" / "evolve" / "SKILL.md").read_text()
+    for text in (create, evolve):
+        assert "$PLUGIN/templates/guide-visuals.yml" in text
+        assert ".github/workflows/guide-visuals.yml" in text
+
+
+def test_evolve_visuals_mode_requires_toolkit_0_6():
+    evolve = (GUIDE / "skills" / "evolve" / "SKILL.md").read_text()
+    section = evolve.split("## 3b.")[1].split("## 4.")[0]
+    assert "below 0.6.0" in section and "visuals.py init" in section
+    assert "Toolkit 0.6.0 adds captured visuals" in evolve
+    assert (GUIDE / "toolkit" / "VERSION").read_text().strip() == "0.6.0"

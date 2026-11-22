@@ -1,0 +1,60 @@
+# Scheduled visual drift check for a cc-guide guide project (specs/008-captured-visuals FR-036).
+# Installed as .github/workflows/guide-visuals.yml by /guide:create (when the guide has
+# visuals) or /guide:evolve --visuals, only when the author agrees.
+# It recaptures every visual into .guide/visuals/ with the runner's podman (the capture
+# environment and the tool environments run as sibling containers, never podman inside
+# podman), compares them with the committed visuals, and puts the report into the job
+# summary. It never changes the repository and needs no repository secret.
+#
+# {{GUIDE_DIR}} is the guide project inside the repository: `.` for a guide in its own
+# repository, the guide subdirectory (for example `guide`) for an embedded guide.
+# Exit status of the drift command: 0 no drift, 10 visual drift (the job fails),
+# 2 an environment or the recipe failed (the job fails).
+name: guide visual drift
+
+on:
+  schedule:
+    - cron: "41 6 * * 1"   # weekly, Monday 06:41 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: {{GUIDE_DIR}}
+
+jobs:
+  visuals:
+    runs-on: ubuntu-latest
+    # the first run builds the capture environment; a hung tool must not hold the runner
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Visual drift
+        run: |
+          set +e
+          uv run tools/guide/visuals.py drift --format markdown > visual-drift.md 2> visual-drift.log
+          status=$?
+          cat visual-drift.md >> "$GITHUB_STEP_SUMMARY"
+          if [ "$status" -ne 0 ] && [ "$status" -ne 10 ]; then
+            { echo; echo '```'; tail -n 40 visual-drift.log; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit $status
+
+      # The reports and the debug images of failed steps (redacted, FR-013).
+      - name: Upload the drift run
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-drift
+          path: |
+            {{GUIDE_DIR}}/.guide/visuals/*/report.*
+            {{GUIDE_DIR}}/.guide/visuals/*/debug/
+          if-no-files-found: ignore
+          include-hidden-files: true   # .guide/ is a hidden directory

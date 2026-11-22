@@ -30,6 +30,8 @@ source.
 
 Usage: uv run tools/guide/drift.py --check [--source ID] [--format markdown|json] [--root DIR]
        uv run tools/guide/drift.py --pr --base SHA [--head SHA] [--format markdown|json] [--root DIR]
+For a drifted source that an environment in visuals.yaml names (`source:`), the report
+lists that environment's visuals as affected (`affected_visuals`, specs/008 FR-030a).
 Exit status: 0 no drift, 10 drift or something that needs attention (changed cited
 files, change-request transitions, pin-missing or unchecked sources, changed or
 unreadable inputs), 2 on configuration errors.
@@ -53,6 +55,7 @@ import yaml
 import fetch
 import guidecfg
 import sources
+import visualcfg
 
 GhCallable = Callable[[str, int], "dict | None"]
 
@@ -75,6 +78,8 @@ class SourceStatus:
     commits_since: int = 0
     log: list[str] = field(default_factory=list)
     message: str = ""
+    # visuals whose environment names this source (specs/008-captured-visuals FR-030a)
+    affected_visuals: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -487,11 +492,26 @@ def report(root: Path, gh: GhCallable = fetch._gh_pull, only: str | None = None)
             rep.changed_files.append(ChangedFile(source.id, path, change, new_path, citing))
             citing_changed.update(p for p, refs in cited.items() if (source.id, path) in refs)
 
+    _affected_visuals(root, rep)
     affected = set(citing_changed) | _linking_pages(pages, citing_changed)
     rep.affected_pages = sorted(_rel(root, p) for p in affected)
     rep.change_requests = evaluate_change_requests(baseline, gh)
     rep.inputs = evaluate_inputs(inputs) if only is None else []
     return rep
+
+
+def _affected_visuals(root: Path, rep: DriftReport) -> None:
+    """For a drifted source, the visuals of every environment that names it (FR-030a); no podman."""
+    try:
+        recipe = visualcfg.load_recipe(root)
+    except visualcfg.RecipeError:
+        return
+    if recipe is None:
+        return
+    changed = {c.source for c in rep.changed_files}
+    for status in rep.sources:
+        if status.status in ("moved", "pin-missing") or status.id in changed:
+            status.affected_visuals = recipe.visuals_for_source(status.id)
 
 
 def to_markdown(rep: DriftReport) -> str:
@@ -501,6 +521,9 @@ def to_markdown(rep: DriftReport) -> str:
     for s in rep.sources:
         out.append(f"## Source `{s.id}`")
         out.append("")
+        if s.affected_visuals:
+            out += ["Affected visuals: " + ", ".join(f"`{v}`" for v in s.affected_visuals)
+                    + " (recapture with `make visuals`).", ""]
         if s.status in ("unchecked", "pin-missing"):
             out += [f"Status: **{s.status}**. {s.message}", ""]
             continue

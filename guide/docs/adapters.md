@@ -1,6 +1,6 @@
 # Output adapters
 
-An adapter turns the format-neutral guide model into one output format. Each lives in `guide/adapters/<format>/` as a descriptor (`adapter.yaml`, copied into a guide project as `tools/guide/adapter.yaml`) and a scaffold (copied by `/guide:create` through `scripts/scaffold-project.sh`). The descriptor's `branding` list names the branding keys the adapter supports. An optional `branding/` directory (the Antora logo template, UI bundle contract, and vendored Red Hat fonts) is vendored next to the toolkit as `tools/guide/branding/`. Skills never call format tools directly; they run the guide project's `make` targets, which every adapter provides with the same names and meaning (`specs/001-cc-guide-plugin/contracts/adapter.md`).
+An adapter turns the format-neutral guide model into one output format. Each lives in `guide/adapters/<format>/` as a descriptor (`adapter.yaml`, copied into a guide project as `tools/guide/adapter.yaml`) and a scaffold (copied by `/guide:create` through `scripts/scaffold-project.sh`). The descriptor's `branding` list names the branding keys the adapter supports. `visual_dir` names the directory captured visuals are written to (Antora `content/modules/ROOT/images/visuals`, MkDocs and gfm `docs/assets/visuals`), and `optional` maps tools that only some targets need (podman for `make visuals` and `make visuals-drift`) to a version constraint with the same syntax as `requires`; `make doctor` warns about a missing optional tool and never fails on it. An optional `branding/` directory (the Antora logo template, UI bundle contract, and vendored Red Hat fonts) is vendored next to the toolkit as `tools/guide/branding/`. Skills never call format tools directly; they run the guide project's `make` targets, which every adapter provides with the same names and meaning (`specs/001-cc-guide-plugin/contracts/adapter.md`).
 
 ## Capabilities
 
@@ -23,7 +23,9 @@ An adapter turns the format-neutral guide model into one output format. Each liv
 
 | Target | Behavior |
 |---|---|
-| `make doctor` | Check the tool chain from `requires` in `adapter.yaml`; prints one install hint per missing tool |
+| `make doctor` | Check the tool chain from `requires` in `adapter.yaml`; prints one install hint per missing tool. Tools under `optional` (podman) are reported as `WARN` when missing and never fail the target |
+| `make visuals [VISUALS=<names>]` | Capture all (or the named) visuals from `visuals.yaml` into `visual_dir`, sidecars into `visuals/` (needs podman, [visuals.md](visuals.md)) |
+| `make visuals-drift [VISUALS=<names>]` | Recapture into `.guide/visuals/<run-id>/` and compare with the committed visuals; never changes committed files |
 | `make fetch-baseline` | Blobless clones and pinned worktrees under `.guide/cache/` |
 | `make site`, `make site-internal` | Build the views into `build/site` and `build/site-internal`; warnings fail the build |
 | `make check` | Builds, `guidecfg.py validate`, `check.py` (page conventions and `guide-rules.yaml`), the leak check on the shareable build; `STRICT=1` adds the claim ledger and forbids stub pages |
@@ -53,7 +55,7 @@ node tools/guide/print-pdf.mjs --html <print html> --guide-root . --view shareab
     [--page-heading CSS] [--section-heading CSS] [--hide CSS] [--allow-broken-links]
 ```
 
-It adds the title page (title, baseline date, every source with its commit) and a linked table of contents, rewrites links between pages to in-document anchors, applies the print CSS (wrapped listings, tables at full width, landscape pages for `.guide-wide` elements, distinct admonitions), prints page numbers and the INTERNAL footer marker, and writes the PDF atomically. It fails, leaving no file, on unresolved links, broken images, or missing packages. Chromium cannot print table-of-contents page numbers, so the table of contents is linked instead (research R8).
+It adds the title page (title, baseline date, every source with its commit) and a linked table of contents, rewrites links between pages to in-document anchors, applies the print CSS (wrapped listings, tables at full width, landscape pages for `.guide-wide` elements, distinct admonitions), prints page numbers and the INTERNAL footer marker, and writes the PDF atomically. Links whose target is an image file (click-to-enlarge wrappers: MkDocs glightbox, the gfm diagram and captured visual links) are not page links: the printer drops the link and keeps the image, for every image. It fails, leaving no file, on unresolved links, broken images, or missing packages. Chromium cannot print table-of-contents page numbers, so the table of contents is linked instead (research R8).
 
 The Antora html-single export was verified on the SAW guide's content: all 19 navigation pages in order, its four SVG diagrams, every admonition type, and tabs degraded to definition lists. Three anchors that are broken in the SAW guide's own source make a strict PDF fail; `--allow-broken-links` prints it anyway.
 

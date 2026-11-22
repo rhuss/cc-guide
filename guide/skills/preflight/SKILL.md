@@ -1,7 +1,7 @@
 ---
 name: preflight
 description: Shared preflight for every /guide command. Resolves the guide project, detects the active harness and the companion capabilities (superpowers, cc-prose, Excalidraw MCP, parallel subagents) from in-session exposure, checks the adapter tool chain, and states the recommended session settings. Invoked by the guide command wrappers (and self-invoked by the skills on harnesses with no command layer) before the command's own skill; stops before any file is written when a requirement fails.
-argument-hint: "<command> [--dir PATH] [--check] [--pages] [--format antora|mkdocs|gfm]"
+argument-hint: "<command> [--dir PATH] [--check] [--pages] [--visuals] [--format antora|mkdocs|gfm]"
 user-invocable: false
 allowed-tools: ["Bash", "Read"]
 ---
@@ -59,9 +59,9 @@ bash "$PLUGIN/scripts/deps.sh" --harness <harness> \
   --dir "$GUIDE" --session-dir "$SESSION"
 ```
 
-It prints JSON `{"harness", "superpowers", "superpowers_version", "multi_agent", "prose", "excalidraw", "excalidraw_allowed", "excalidraw_allowed_in"}`. `excalidraw_allowed`/`excalidraw_allowed_in` are meaningful only when `harness == "claude"`; on other harnesses they are `false`/`[]`.
+It prints JSON `{"harness", "superpowers", "superpowers_version", "multi_agent", "prose", "excalidraw", "excalidraw_allowed", "excalidraw_allowed_in", "podman"}`. `excalidraw_allowed`/`excalidraw_allowed_in` are meaningful only when `harness == "claude"`; on other harnesses they are `false`/`[]`.
 
-**superpowers** is required for `create` and for `evolve` without `--check` or `--pages`. When `superpowers` is false for those, stop and write nothing (FR-011), naming the active harness:
+**superpowers** is required for `create` and for `evolve` without `--check`, `--pages`, or `--visuals`. When `superpowers` is false for those, stop and write nothing (FR-011), naming the active harness:
 > `/guide:<command>` needs the superpowers plugin for this harness, and it is not available in this session. Install it for `<harness>` (Claude Code: `claude plugin install superpowers@claude-plugins-official`; Codex or OpenCode: install superpowers through that harness's plugin mechanism), restart the session, and run the command again. Nothing was written.
 
 When `superpowers` is true, check the version advisory (FR-016); never block on it:
@@ -75,7 +75,7 @@ bash "$PLUGIN/scripts/superpowers-probe.sh" <superpowers_version>
 | 0 | Version at or above the known-good threshold, or no version reported | Continue. |
 | 3 | Version below the known-good threshold in `$PLUGIN/compat.yaml` | Warn once with the `problems[]` line, then continue. |
 
-**multi_agent** is required for `create` and for `evolve` without `--check` or `--pages` (per-page writing and review are dispatched to parallel subagents, FR-017). When `multi_agent` is false for those, stop and write nothing:
+**multi_agent** is required for `create` and for `evolve` without `--check`, `--pages`, or `--visuals` (per-page writing and review are dispatched to parallel subagents, FR-017). When `multi_agent` is false for those, stop and write nothing:
 > `/guide:<command>` needs your harness's parallel subagent dispatch, and it is not available in this session. On Codex, enable its multi-agent features (see the superpowers Codex notes) and restart; on Claude Code the subagent tool is always available. There is no single-agent fallback. Nothing was written.
 
 **cc-prose** is optional (FR-003a, FR-008). When `prose` is false, show exactly one line and continue:
@@ -88,6 +88,8 @@ Record `prose: present|absent`; the create and evolve skills pass it to the page
 - When `harness != "claude"`: there is no settings/permission wiring to do; report Excalidraw presence from exposure only (`excalidraw_allowed` is `false` and unused). When Excalidraw is absent, diagram tasks use the placeholder path (FR-009).
 
 Preflight never stops for Excalidraw and writes no settings.
+
+**podman** is optional (specs/008-captured-visuals FR-031a): `podman` is true when `podman info` succeeds, which captured visuals (`make visuals`, `make visuals-drift`) need. Record `podman=available|missing`. Preflight never stops for podman. Without it, create proposes visuals only as placeholders the author agrees to, and evolve reports that visual drift was not checked.
 
 ### 3. Adapter tool chain
 
@@ -116,7 +118,7 @@ You can see your own model name in your system prompt; you cannot see the effort
 Report a compact block and hand it to the calling skill:
 
 ```text
-preflight: guide=<GUIDE> project=<exists|new> embedded=<yes|no> harness=<claude|codex|opencode> superpowers=<ok|unknown-version|not-needed> superpowers_version=<version|none> multi_agent=<yes|no> prose=<present|absent> excalidraw=<available|missing> excalidraw_allowed=<true|false|n/a> excalidraw_allowed_in=<paths|none> doctor=<ok|skipped|failed>
+preflight: guide=<GUIDE> project=<exists|new> embedded=<yes|no> harness=<claude|codex|opencode> superpowers=<ok|unknown-version|not-needed> superpowers_version=<version|none> multi_agent=<yes|no> prose=<present|absent> excalidraw=<available|missing> excalidraw_allowed=<true|false|n/a> excalidraw_allowed_in=<paths|none> podman=<available|missing> doctor=<ok|skipped|failed>
 ```
 
 `excalidraw_allowed` is `n/a` on non-Claude harnesses.

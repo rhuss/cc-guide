@@ -64,6 +64,7 @@ DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 URL_RE = re.compile(r"^[a-z][a-z0-9+.-]*://")
 FINDING_ID_RE = re.compile(r"^UF-\d+$")
 SELF_ID = "self"                       # the reserved id of the host repository source
+VISUAL_ID = "visual"                   # reserved: visual:<name> cites a captured visual
 DEFAULT_FRONT_PAGE = "../README.md"    # embedded.front_page when guide.yaml does not set it
 LOCAL_FILE = "confidential.local.yaml"  # git-ignored confidential data of an embedded guide
 PR_CHECK = ("off", "on")
@@ -283,11 +284,13 @@ class Adapter:
     page_glob: str = "**/*"
     comment: str = "line"
     requires: dict[str, str] = field(default_factory=dict)
+    optional: dict[str, str] = field(default_factory=dict)   # tools doctor only warns about
     admonitions: dict[str, str] = field(default_factory=dict)
     experimental: dict[str, str] = field(default_factory=dict)
     attributes: str = ""
     preview_port: int = 8000
     image_dir: str = ""
+    visual_dir: str = ""   # captured visuals (specs/008-captured-visuals FR-015)
     branding: list[str] = field(default_factory=list)   # supported branding keys
     extra: dict[str, Any] = field(default_factory=dict)
 
@@ -814,6 +817,8 @@ def load_baseline(root: Path) -> Baseline:
         is_self = s.get("id") == SELF_ID
         if is_self and not embedded:
             c.add(f"{key}.id", "the source id 'self' is reserved for embedded guides")
+        if s.get("id") == VISUAL_ID:
+            c.add(f"{key}.id", "the source id 'visual' is reserved for visual citations")
         fingerprints = s.get("fingerprints") or {}
         if "fingerprints" in s and not is_self:
             c.add(f"{key}.fingerprints", "allowed only on the 'self' source")

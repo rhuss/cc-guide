@@ -28,6 +28,10 @@ if ! bash "$REPO/tests/adapters/scaffold.sh" antora "$guide" >"$tmp/scaffold.log
 fi
 pass "scaffold"
 
+# Captured visuals (specs/008-captured-visuals): the committed fixture images and sidecars,
+# embedded with visual: citations; no podman needed.
+python3 "$REPO/tests/adapters/add_visuals.py" antora "$guide" && pass "fixture visuals added" || failed "add_visuals.py"
+
 if make -C "$guide" doctor check dist >"$log" 2>&1; then
   pass "make doctor check dist"
 else
@@ -60,6 +64,19 @@ if grep -q 'minisvc 1\.2\.3' "$guide/build/site/guide/index.html"; then
   pass "baseline attribute rendered"
 else
   failed "baseline attribute not rendered"
+fi
+
+for img in colors.svg table.png; do
+  if find "$guide/build/site" -path "*visuals/$img" -type f | grep -q .; then
+    pass "site contains visuals/$img"
+  else
+    failed "site lacks visuals/$img"
+  fi
+done
+if make -C "$guide" pdf >"$log" 2>&1 && find "$guide" -maxdepth 2 -name '*.pdf' -newer "$guide/visuals.yaml" | grep -q .; then
+  pass "make pdf with captured visuals"
+else
+  failed "make pdf with captured visuals"; tail -20 "$log"
 fi
 
 # Plant a confidential term in a shareable page: make check must fail and name it.

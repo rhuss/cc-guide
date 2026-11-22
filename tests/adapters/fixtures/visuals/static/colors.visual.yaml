@@ -1,0 +1,54 @@
+schema: 1
+name: colors
+variant: default
+kind: cli
+image: docs/assets/visuals/colors.svg
+environment:
+  name: shell
+  image: docker.io/library/alpine:3.20
+  digest: sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
+  platform: linux/arm64
+fingerprint: 6a232c9d19289fdb
+capture_env: 4278a241e451
+captured_at: '2026-11-22T16:41:32Z'
+redaction:
+  rules:
+  - home-path
+  - user-path
+  - user-at
+  - k8s-api
+  - hostname
+  - ipv4
+  - jwt
+  - bearer
+  - api-key
+  - private-key
+  disabled: []
+  replacements:
+    home-path: 1
+    user-path: 1
+    user-at: 1
+    k8s-api: 0
+    hostname: 1
+    ipv4: 0
+    jwt: 0
+    bearer: 1
+    api-key: 1
+    private-key: 0
+masks: 0
+scripts: []
+highlights: []
+style: 30e82fe9b23b5f87
+text: |-
+  $ sh /visuals/demo/colors.sh
+  PASS 12 checks  truecolor  dim
+  ████░░ 66%
+  report: /home/user/report.md
+  notes:  /home/user/notes
+  host:   example-host
+  ssh:    user@server
+  auth:   Authorization: Bearer <redacted>
+  key:    <redacted>
+  emoji:  🚀 launch
+  zwj:    👩‍💻 dev
+  warn:   ⚠️ disk

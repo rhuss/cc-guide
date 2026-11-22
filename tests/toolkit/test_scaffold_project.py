@@ -175,3 +175,24 @@ def test_standalone_scaffold_unchanged_by_embedded_overlay(tmp_path):
     assert (guide / "docs" / "README.md").read_text() == \
         (scaffold / "docs" / "README.md").read_text().replace("{{TITLE}}", "T")
     assert "confidential.local.yaml" not in (guide / ".gitignore").read_text()
+
+
+def test_visuals_template_and_capture_context(tmp_path):
+    """specs/008-captured-visuals T040: the recipe template and a clean capture build context."""
+    plugin = plugin_copy(tmp_path)
+    capture = plugin / "toolkit" / "capture"
+    (capture / "__pycache__").mkdir(exist_ok=True)
+    (capture / "__pycache__" / "redact.cpython-312.pyc").write_bytes(b"\0")
+    guide = tmp_path / "g"
+    assert run(plugin / "scripts/scaffold-project.sh", "--format", "gfm", "--title", "T", guide).returncode == 0
+    tools = guide / "tools" / "guide"
+    for check in ("initial", "refresh"):
+        assert (tools / "templates" / "visuals.yaml").read_text() == (plugin / "templates/visuals.yaml").read_text()
+        for name in ("Containerfile", ".containerignore", "runner.py", "web.py", "render_cli.py", "redact.py"):
+            assert (tools / "capture" / name).is_file(), (check, name)
+        assert (tools / "capture" / "licenses").is_dir()
+        assert not (tools / "capture" / "__pycache__").exists(), check
+        assert (tools / "visuals.py").is_file() and (tools / "visualcfg.py").is_file()
+        (tools / "templates" / "visuals.yaml").unlink()
+        proc = run(plugin / "scripts/scaffold-project.sh", "--format", "gfm", "--toolkit-only", guide)
+        assert proc.returncode == 0, proc.stderr

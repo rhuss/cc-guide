@@ -141,3 +141,13 @@ def test_embedded_ledger_lives_in_the_guide_root(mini_host):
     root = make_embedded_guide(host, commit)
     adapter = guidecfg.load_adapter(root)
     assert ledger.default_ledger(root, adapter) == root / "ledger" / "claims.md"
+
+
+def test_visual_reference_accepted(guide):
+    page = guide / "content" / "modules" / "ROOT" / "pages" / "admin" / "install.adoc"
+    page.write_text(PAGE.replace("// mini:config/defaults.yaml:2-4\n", "// mini:config/defaults.yaml:2-4\n// visual:table\n"))
+    ledger_file(guide).write_text(adoc_ledger(ROWS + [("C-INST-04", "The table shows accuracy.", "admin/install",
+                                                       "visual:table", "CONFIRMED")]))
+    errors, stats = ledger.check(guide)
+    assert errors == []
+    assert stats["claims"] == 4

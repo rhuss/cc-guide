@@ -11,7 +11,7 @@ The method comes from building the [Secure Agent Workspace](https://github.com/v
 | Command | What it does |
 |---|---|
 | `/guide:create` | Interview, scaffold, pin sources, plan, write and review every page, final review, run summary |
-| `/guide:evolve` | Drift report against the baseline, targeted page updates with the same reviews, new baseline written last; `--check` reports drift only, `--adopt` brings in an existing guide |
+| `/guide:evolve` | Drift report against the baseline, targeted page updates with the same reviews, new baseline written last; `--check` reports drift only, `--adopt` brings in an existing guide, `--pages` and `--visuals` add GitHub Pages or captured visuals |
 | `/guide:preview` | Build and serve the guide locally with live reload; shareable or internal view |
 | `/guide:export` | One PDF of the whole guide with a title page, linked table of contents, and page numbers |
 | `/guide:upstream` | Re-verify collected source problems on the current default branch, draft reports, file only what you approve |
@@ -103,11 +103,14 @@ baseline.yaml         every source pinned to a commit, plus documented change re
 inputs.yaml           references and checksums of transcripts and notes (never their content)
 findings/upstream.yaml  problems found in the sources and their filing status
 runs/<run-id>.md      rulings, review statistics, and findings of each run
-tools/guide/          the vendored toolkit (checks, drift, leak check, PDF printer)
+tools/guide/          the vendored toolkit (checks, drift, leak check, PDF printer, capture environment)
+visuals.yaml          capture recipe of the captured visuals (optional); sidecars and seed data in visuals/
 <adapter content>     pages, partials, images, diagram sources
 ```
 
 The toolkit lives in the guide project so the scheduled drift check (`.github/workflows/guide-drift.yml`, opt-in) runs in CI without Claude Code.
+
+Guides about tools with a web UI or colored CLI output can show what the reader will see. Captured visuals are screenshots and rendered terminal output that `make visuals` produces from a committed recipe (`visuals.yaml`) in throwaway podman containers: annotated and cropped web UI screenshots, and self-contained SVGs of CLI output with colors and a neutral prompt. Host names, user names, home paths, and token-shaped strings are redacted before any image or sidecar is written. Every visual has a text sidecar, so checks and page reviews verify it without looking at the image, and `make visuals-drift` reports when the tool's UI or output changed. podman is needed only for these two targets. See [`guide/docs/visuals.md`](guide/docs/visuals.md); `/guide:evolve --visuals` adds visuals to an existing guide.
 
 Antora and MkDocs guides can also opt into GitHub Pages: `/guide:create` then installs `.github/workflows/guide-pages.yml`, which builds the shareable view, runs the leak check, and publishes it at `https://<owner>.github.io/<repo>/` with no separate pages repository or branch. Existing Antora and MkDocs guides, also ones kept in a subdirectory of a code repository, get the same workflow with `/guide:evolve --pages`.
 

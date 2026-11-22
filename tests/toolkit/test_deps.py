@@ -41,6 +41,7 @@ def deps(
     no_jq: bool = False,
 ) -> dict:
     env = dict(os.environ)
+    env.setdefault("CC_GUIDE_PODMAN", "/nonexistent/podman")   # podman absent unless a test sets it
     if home is not None:
         env["HOME"] = str(home)
     if no_jq:
@@ -84,6 +85,7 @@ def test_capability_booleans_round_trip(tmp_path, no_jq):
         "excalidraw": True,
         "excalidraw_allowed": False,
         "excalidraw_allowed_in": [],
+        "podman": False,
     }
 
 
@@ -101,6 +103,7 @@ def test_defaults_everything_absent(tmp_path, no_jq):
         "excalidraw": False,
         "excalidraw_allowed": False,
         "excalidraw_allowed_in": [],
+        "podman": False,
     }
 
 
@@ -208,4 +211,20 @@ def test_legacy_fields_present_with_same_values_on_claude(tmp_path, no_jq):
     assert result["excalidraw_allowed"] is True
     assert result["excalidraw_allowed_in"] == [real(local)]
     # ... and the new fields are additive.
-    assert set(result) - LEGACY_FIELDS == {"harness", "superpowers_version", "multi_agent", "excalidraw"}
+    assert set(result) - LEGACY_FIELDS == {"harness", "superpowers_version", "multi_agent", "excalidraw", "podman"}
+
+
+@pytest.mark.parametrize("no_jq", [False, True])
+@pytest.mark.parametrize("works", [True, False])
+def test_podman_detection(tmp_path, monkeypatch, no_jq, works):
+    """FR-031a: podman=true when `podman info` succeeds; never an error otherwise."""
+    fake = tmp_path / "podman"
+    fake.write_text("#!/bin/bash\n[[ $1 == info ]] && exit %d\nexit 1\n" % (0 if works else 125))
+    fake.chmod(0o755)
+    monkeypatch.setenv("CC_GUIDE_PODMAN", str(fake))
+    result = deps(home=tmp_path / "home", project=tmp_path / "guide", no_jq=no_jq)
+    assert result["podman"] is works
+
+
+def test_podman_missing_is_false(tmp_path):
+    assert deps(home=tmp_path / "home", project=tmp_path / "guide")["podman"] is False

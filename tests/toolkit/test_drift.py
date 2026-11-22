@@ -606,3 +606,53 @@ def test_local_input_without_local_file_is_skipped(emb):
     assert {i.id: i.status for i in rep.inputs} == {"call-1": "skipped"}
     assert not rep.has_drift
     assert run_cli(emb).returncode == 0
+
+
+VISUALS_RECIPE = """schema: 1
+environments:
+  app:
+    kind: web
+    image: docker.io/library/nginx:1.27-alpine
+    port: 80
+    source: mini
+  shell:
+    kind: cli
+    image: docker.io/library/alpine:3.20
+visuals:
+  runs:
+    kind: web
+    env: app
+    steps:
+      - goto: /
+  app-cli:
+    kind: cli
+    env: app
+    command: nginx -v
+  plain:
+    kind: cli
+    env: shell
+    command: echo hi
+"""
+
+
+def test_affected_visuals_of_a_drifted_source(tmp_path, fixture_repo):
+    """FR-030a: a tool upgrade points at its visuals before they are recaptured; no podman."""
+    repo, _, second, _ = fixture_repo
+    root = make_guide(tmp_path / "g", repo.as_uri(), second)
+    (root / "visuals.yaml").write_text(VISUALS_RECIPE)
+    rep = drift.report(root)
+    assert rep.sources[0].affected_visuals == ["app-cli", "runs"]
+    md = run_cli(root, "--format", "markdown")
+    assert md.returncode == 10
+    assert "Affected visuals: `app-cli`, `runs`" in md.stdout
+    data = json.loads(run_cli(root, "--format", "json").stdout)
+    assert data["sources"][0]["affected_visuals"] == ["app-cli", "runs"]
+
+
+def test_no_affected_visuals_without_drift_or_recipe(tmp_path, fixture_repo):
+    repo, _, _, third = fixture_repo
+    root = make_guide(tmp_path / "g", repo.as_uri(), third)
+    (root / "visuals.yaml").write_text(VISUALS_RECIPE)
+    assert drift.report(root).sources[0].affected_visuals == []
+    root2 = make_guide(tmp_path / "g2", repo.as_uri(), fixture_repo[2])
+    assert drift.report(root2).sources[0].affected_visuals == []

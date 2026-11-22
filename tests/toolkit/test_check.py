@@ -1079,3 +1079,279 @@ def test_marked_front_page_malformed_markers_reported(emb):
     set_front(emb, "Author pitch.\n\n" + BEGIN + "\n" + good_region())
     found = [v for v in echeck(emb) if v.rule == "region-unbalanced"]
     assert len(found) == 1 and found[0].path == "../README.md"
+
+
+# --- captured visuals (specs/008-captured-visuals, rule visuals) ----------------
+
+import visualcfg  # noqa: E402
+
+GFM_DOCS_ADAPTER = """format: gfm
+content_root: docs
+internal_root: internal
+page_glob: "**/*.md"
+comment: html
+"""
+
+VISUAL_RECIPE = """schema: 1
+environments:
+  shell:
+    kind: cli
+    image: docker.io/library/alpine:3.20
+  site:
+    kind: web
+    image: docker.io/library/nginx:1.27-alpine
+    port: 80
+    source: mini
+visuals:
+  colors:
+    kind: cli
+    env: shell
+    command: printf ok
+  table:
+    kind: web
+    env: site
+    variants: [light, dark]
+    steps:
+      - goto: /
+      - crop: "role=table"
+"""
+
+LAYOUTS = {
+    "antora": (ANTORA_ADAPTER, "content/modules/ROOT/images/visuals", f"{PAGES}/shots.adoc"),
+    "mkdocs": (MKDOCS_ADAPTER, "docs/assets/visuals", "docs/user/shots.md"),
+    "gfm": (GFM_DOCS_ADAPTER, "docs/assets/visuals", "docs/user/shots.md"),
+}
+
+
+def shots_page(fmt: str, refs: list[str], images: list[str]) -> str:
+    if fmt == "antora":
+        block = "\n".join(f"// {r}" for r in refs)
+        body = "\n\n".join(f'image::visuals/{i}["Shot {i}"]' for i in images)
+        return f"= Shots\n\n// Sources:\n{block}\n\nThe shots follow.\n\n{body}\n"
+    block = "\n".join(refs)
+    body = "\n\n".join(f"![Shot {i}](../assets/visuals/{i})" for i in images)
+    return f"# Shots\n\n<!-- Sources:\n{block}\n-->\n\nThe shots follow.\n\n{body}\n"
+
+
+def sidecar(root: Path, name: str, variant: str, kind: str, image: str, **extra) -> dict:
+    recipe = visualcfg.load_recipe(root)
+    data = {"schema": 1, "name": name.removesuffix("-dark"), "variant": variant, "kind": kind, "image": image,
+            "environment": {"name": "x", "image": "y", "digest": "sha256:z", "platform": "linux/amd64"},
+            "fingerprint": visualcfg.fingerprint(recipe, name.removesuffix("-dark"), root),
+            "capture_env": visualcfg.capture_env_version(), "captured_at": "2026-01-01T00:00:00Z",
+            "redaction": {"rules": ["home-path"], "disabled": [], "replacements": {"home-path": 0}},
+            "masks": 0, "scripts": [], "highlights": [], "style": None, "text": "ok"}
+    data.update(extra)
+    visualcfg.dump_sidecar(visualcfg.sidecar_path(root, name), data)
+    return data
+
+
+def visual_guide(root: Path, fmt: str) -> tuple[Path, str, Path]:
+    adapter, vdir, page = LAYOUTS[fmt]
+    write(root, "tools/guide/adapter.yaml", adapter)
+    path = root / "guide.yaml"
+    data = yaml.safe_load(path.read_text())
+    data["format"] = fmt
+    path.write_text(yaml.safe_dump(data, sort_keys=False))
+    write(root, "visuals.yaml", VISUAL_RECIPE)
+    write(root, f"{vdir}/colors.svg", f"<svg><text>a {EM} b</text></svg>\n")
+    write(root, f"{vdir}/table.png", "png")
+    commit = guidecfg.load_baseline(root).source("mini").commit
+    sidecar(root, "colors", "default", "cli", f"{vdir}/colors.svg")
+    sidecar(root, "table", "light", "web", f"{vdir}/table.png", variants={"dark": "skipped"},
+            environment={"name": "site", "image": "y", "digest": "sha256:z", "platform": "linux/amd64",
+                         "source": "mini", "source_commit": commit})
+    page_path = write(root, page, shots_page(fmt, ["visual:colors", "visual:table"], ["colors.svg", "table.png"]))
+    return root, vdir, page_path
+
+
+def vrun(root: Path, strict: bool = False):
+    warnings: list[str] = []
+    found = check.check_pages(root, guidecfg.load_guide(root), guidecfg.load_baseline(root), strict,
+                              warnings=warnings)
+    return [v for v in found if v.rule in ("visuals", "dash")], [w for w in warnings if "[visuals]" in w]
+
+
+@pytest.mark.parametrize("fmt", ["antora", "mkdocs", "gfm"])
+def test_visuals_clean(render_fixture_guide, fmt):
+    root, _, _ = visual_guide(render_fixture_guide, fmt)
+    assert vrun(root) == ([], [])
+
+
+@pytest.mark.parametrize("fmt", ["antora", "mkdocs", "gfm"])
+def test_visuals_undeclared_image(render_fixture_guide, fmt):
+    root, vdir, page = visual_guide(render_fixture_guide, fmt)
+    write(root, f"{vdir}/handmade.png", "png")
+    page.write_text(shots_page(fmt, ["visual:colors"], ["colors.svg", "handmade.png"]))
+    errors, _ = vrun(root)
+    assert any("handmade.png is not produced by a recipe" in v.message for v in errors), errors
+
+
+@pytest.mark.parametrize("fmt", ["antora", "mkdocs", "gfm"])
+def test_visuals_missing_image_reports_page_and_line(render_fixture_guide, fmt):
+    root, vdir, page = visual_guide(render_fixture_guide, fmt)
+    (root / vdir / "table.png").unlink()
+    errors, _ = vrun(root)
+    hit = [v for v in errors if "has no image" in v.message]
+    assert len(hit) == 1 and hit[0].path == LAYOUTS[fmt][2] and hit[0].line > 0
+    assert f"{vdir}/table.png" in hit[0].message
+
+
+def test_visuals_missing_sidecar(render_fixture_guide):
+    root, _, _ = visual_guide(render_fixture_guide, "gfm")
+    visualcfg.sidecar_path(root, "colors").unlink()
+    errors, _ = vrun(root)
+    assert any("has no sidecar visuals/colors.visual.yaml" in v.message for v in errors), errors
+
+
+def test_visuals_declared_not_embedded_missing(render_fixture_guide):
+    root, vdir, page = visual_guide(render_fixture_guide, "gfm")
+    page.write_text(shots_page("gfm", ["visual:colors"], ["colors.svg"]))
+    (root / vdir / "table.png").unlink()
+    errors, _ = vrun(root)
+    assert [(v.path, v.message) for v in errors] == [
+        ("visuals/table.visual.yaml", f"visual 'table' has no image {vdir}/table.png (run make visuals)")]
+
+
+def test_visuals_unredacted(render_fixture_guide):
+    root, vdir, _ = visual_guide(render_fixture_guide, "gfm")
+    data = visualcfg.load_sidecar(visualcfg.sidecar_path(root, "colors"))
+    del data["redaction"]
+    visualcfg.dump_sidecar(visualcfg.sidecar_path(root, "colors"), data)
+    errors, _ = vrun(root)
+    assert any("unredacted" in v.message for v in errors)
+
+
+def test_visuals_undeclared_citation_and_missing_citation(render_fixture_guide):
+    root, _, page = visual_guide(render_fixture_guide, "mkdocs")
+    page.write_text(shots_page("mkdocs", ["visual:nope", "visual:colors"], ["colors.svg", "table.png"]))
+    errors, _ = vrun(root)
+    messages = [v.message for v in errors]
+    assert any("visual:nope: no visual 'nope'" in m for m in messages)
+    assert any("table.png is embedded without citing visual:table" in m for m in messages)
+
+
+def test_visuals_confidential_term_in_sidecar(render_fixture_guide):
+    root, _, _ = visual_guide(render_fixture_guide, "gfm")
+    sidecar(root, "colors", "default", "cli", "docs/assets/visuals/colors.svg", text="owner ACME Corp\nticket AB-12")
+    errors, _ = vrun(root)
+    messages = [v.message for v in errors]
+    assert any("confidential term 'ACME Corp'" in m for m in messages)
+    assert any("confidential pattern match 'AB-12'" in m for m in messages)
+
+
+def test_visuals_invalid_recipe(render_fixture_guide):
+    root, _, _ = visual_guide(render_fixture_guide, "gfm")
+    write(root, "visuals.yaml", VISUAL_RECIPE.replace("alpine:3.20", "alpine"))
+    errors, _ = vrun(root)
+    assert any(v.path == "visuals.yaml" and "tag or digest" in v.message for v in errors)
+
+
+@pytest.mark.parametrize("strict", [False, True])
+def test_visuals_stale_is_a_warning(render_fixture_guide, strict):
+    root, _, _ = visual_guide(render_fixture_guide, "gfm")
+    write(root, "visuals.yaml", VISUAL_RECIPE.replace("command: printf ok", "command: printf changed"))
+    errors, warnings = vrun(root, strict)
+    assert errors == []
+    assert any("visuals/colors.visual.yaml: [visuals] warning: visual 'colors' is stale" in w for w in warnings)
+
+
+def test_visuals_behind_baseline_is_a_warning(render_fixture_guide):
+    root, vdir, _ = visual_guide(render_fixture_guide, "gfm")
+    sidecar(root, "table", "light", "web", f"{vdir}/table.png", variants={"dark": "skipped"},
+            environment={"name": "site", "source": "mini", "source_commit": "0" * 40})
+    errors, warnings = vrun(root)
+    assert errors == []
+    assert any("captured at mini 0000000, before the baseline pin" in w for w in warnings)
+
+
+def test_visuals_dark_variant_required_unless_skipped(render_fixture_guide):
+    root, vdir, _ = visual_guide(render_fixture_guide, "gfm")
+    sidecar(root, "table", "light", "web", f"{vdir}/table.png", variants={"dark": "captured"})
+    errors, _ = vrun(root)
+    assert any("visual 'table-dark' has no sidecar" in v.message for v in errors)
+    sidecar(root, "table-dark", "dark", "web", f"{vdir}/table-dark.png")
+    write(root, f"{vdir}/table-dark.png", "png")
+    assert vrun(root)[0] == []
+
+
+def test_visuals_placeholder_is_a_warning(render_fixture_guide):
+    root, vdir, _ = visual_guide(render_fixture_guide, "gfm")
+    (root / vdir / "colors.svg").unlink()
+    recipe = visualcfg.load_recipe(root)
+    visualcfg.dump_sidecar(visualcfg.sidecar_path(root, "colors"),
+                           visualcfg.placeholder_sidecar(recipe, "colors", "default", "colors"))
+    errors, warnings = vrun(root)
+    assert errors == []
+    assert any("placeholder, not yet captured" in w for w in warnings)
+
+
+@pytest.mark.parametrize("fmt", ["antora", "mkdocs", "gfm"])
+def test_visuals_dark_image_needs_dark_citation(render_fixture_guide, fmt):
+    root, vdir, page = visual_guide(render_fixture_guide, fmt)
+    sidecar(root, "table", "light", "web", f"{vdir}/table.png", variants={"dark": "captured"})
+    sidecar(root, "table-dark", "dark", "web", f"{vdir}/table-dark.png")
+    write(root, f"{vdir}/table-dark.png", "png")
+    page.write_text(shots_page(fmt, ["visual:colors", "visual:table"], ["colors.svg", "table.png", "table-dark.png"]))
+    errors, _ = vrun(root)
+    assert any("table-dark.png is embedded without citing visual:table-dark" in v.message for v in errors), errors
+    page.write_text(shots_page(fmt, ["visual:colors", "visual:table", "visual:table-dark"],
+                               ["colors.svg", "table.png", "table-dark.png"]))
+    assert vrun(root)[0] == []
+
+
+@pytest.mark.parametrize("fmt", ["antora", "mkdocs", "gfm"])
+def test_visuals_embedded_placeholder_is_not_a_broken_link(render_fixture_guide, fmt):
+    root, vdir, _ = visual_guide(render_fixture_guide, fmt)
+    (root / vdir / "colors.svg").unlink()
+    recipe = visualcfg.load_recipe(root)
+    visualcfg.dump_sidecar(visualcfg.sidecar_path(root, "colors"),
+                           visualcfg.placeholder_sidecar(recipe, "colors", "default", "colors"))
+    found = check.check_pages(root, guidecfg.load_guide(root), guidecfg.load_baseline(root), warnings=[])
+    assert not [v for v in found if "colors.svg" in v.message], found
+    # a missing image of a captured visual stays a broken link and a visuals error
+    (root / vdir / "table.png").unlink()
+    found = check.check_pages(root, guidecfg.load_guide(root), guidecfg.load_baseline(root), warnings=[])
+    assert any(v.rule == "visuals" and "table.png" in v.message for v in found)
+
+
+def test_visuals_svg_dash_is_not_a_dash_violation(render_fixture_guide):
+    root, vdir, _ = visual_guide(render_fixture_guide, "mkdocs")
+    assert EM in (root / vdir / "colors.svg").read_text()
+    errors, _ = vrun(root)
+    assert not [v for v in errors if v.rule == "dash"]
+    write(root, "docs/assets/other.svg", f"<svg>{EM}</svg>\n")
+    assert [v.rule for v in vrun(root)[0]] == ["dash"]
+
+
+def test_visuals_absent_means_no_rule(render_fixture_guide):
+    write(render_fixture_guide, "tools/guide/adapter.yaml", MKDOCS_ADAPTER)
+    path = render_fixture_guide / "guide.yaml"
+    data = yaml.safe_load(path.read_text())
+    data["format"] = "mkdocs"
+    path.write_text(yaml.safe_dump(data, sort_keys=False))
+    assert vrun(render_fixture_guide) == ([], [])
+
+
+def emb_visual(emb: Path) -> str:
+    """A captured CLI visual in an embedded guide, cited and embedded by the front page region."""
+    write(emb, "visuals.yaml", "schema: 1\nenvironments:\n  shell:\n    kind: cli\n    image: alpine:3.20\n"
+                               "visuals:\n  colors:\n    kind: cli\n    env: shell\n    command: printf ok\n")
+    write(emb, "docs/assets/visuals/colors.svg", "<svg/>\n")
+    sidecar(emb, "colors", "default", "cli", "docs/assets/visuals/colors.svg")
+    region = good_region().replace("self:pyproject.toml\n", "self:pyproject.toml\nvisual:colors\n").replace(
+        "Mini Host prints a greeting.\n", "Mini Host prints a greeting.\n\n"
+        "![Colored output](guide/docs/assets/visuals/colors.svg)\n")
+    return region_front("Author pitch before the region.\n", region)
+
+
+def test_visuals_on_a_marked_front_page_read_the_region(emb):
+    """Checkpoint 2 finding: the visuals rules read only the guide region of the front page."""
+    set_front(emb, emb_visual(emb))
+    assert [v for v in echeck(emb) if v.rule == "visuals"] == []
+
+
+def test_drift_pages_include_the_front_page(emb):
+    import visuals
+    set_front(emb, emb_visual(emb))
+    assert visuals.citing_pages(emb)["colors"] == ["../README.md"]

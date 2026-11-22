@@ -1,0 +1,50 @@
+# Capture environment for cc-guide captured visuals (specs/008-captured-visuals, research R2).
+# Built locally by tools/guide/visuals.py with podman and tagged
+# localhost/cc-guide-capture:<capture env version> (a hash over this directory, R3).
+# Every version below is pinned so two runs on the same CPU platform render the same images.
+#
+# Base: Playwright 1.49.1 browsers (Chromium 1148) on Ubuntu 24.04 (noble), pinned by the
+# index (manifest list) digest so linux/amd64 and linux/arm64 hosts resolve the same release.
+FROM mcr.microsoft.com/playwright/python:v1.49.1-noble@sha256:42e251ec3238672c931be6c3565ff279690ae072c3e22058128d0412494f6866
+
+# uv from its pinned image (project rule: uv, never pip).
+COPY --from=ghcr.io/astral-sh/uv:0.9.30@sha256:538e0b39736e7feae937a65983e49d2ab75e1559d35041f9878b7b7e51de91e4 /uv /usr/local/bin/uv
+
+# Fonts pinned to the noble release pocket (noble-updates versions disappear when superseded):
+# DejaVu Sans Mono regular and bold (core), the oblique faces for italic (extra), and
+# Noto Color Emoji for emoji in CLI output.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      fonts-dejavu-core=2.37-8 \
+      fonts-dejavu-extra=2.37-8 \
+      fonts-noto-color-emoji=2.042-1 \
+ && rm -rf /var/lib/apt/lists/*
+
+# Python packages for the runner. The base image ships the browsers only, so the
+# Playwright package is installed here at the version that matches them. The noble
+# Python is externally managed, hence --break-system-packages. Every package uv installs
+# is pinned, the transitive ones included: wcwidth decides the cell width of every
+# character pyte draws, zopfli and brotli compress the embedded fonts, and greenlet,
+# pyee, and typing-extensions drive Playwright. `uv pip list --system` in the image
+# lists exactly these (plus pip, virtualenv, distlib, filelock, and platformdirs from
+# the base image, which the runner does not use).
+RUN uv pip install --system --break-system-packages --no-cache \
+      playwright==1.49.1 \
+      greenlet==3.1.1 \
+      pyee==12.0.0 \
+      typing-extensions==4.16.0 \
+      pyte==0.8.2 \
+      wcwidth==0.9.5 \
+      "fonttools[woff]==4.67.0" \
+      brotli==1.1.0 \
+      zopfli==0.4.3 \
+      pillow==11.0.0 \
+      pyyaml==6.0.2
+
+COPY licenses/ /opt/ccg/licenses/
+COPY *.py /opt/ccg/
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/opt/ccg
+
+ENTRYPOINT ["sleep", "infinity"]
