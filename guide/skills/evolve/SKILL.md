@@ -1,7 +1,7 @@
 ---
 name: evolve
 description: Evolve a source-verified guide after its sources changed (a guide in its own repository, or a guide embedded in the repository it documents, whose README is the front page). Reports drift against the recorded baseline (check-only mode needs no AI and no superpowers), re-evaluates documented change requests, registers new inputs, updates only the affected pages through superpowers with the same per-page reviews as create, and writes the new baseline last, after the checks pass. Also adopts guides that were not created by cc-guide. Use for /guide:evolve.
-argument-hint: "[--check] [--adopt] [--to ID=REF]... [--input PATH]... [--rigor fast|standard|strict] [--dir PATH]"
+argument-hint: "[--check] [--adopt] [--pages] [--to ID=REF]... [--input PATH]... [--rigor fast|standard|strict] [--dir PATH]"
 user-invocable: false
 allowed-tools: ["Bash", "Read", "Write", "Edit", "Glob", "Grep", "Skill", "Agent", "AskUserQuestion"]
 ---
@@ -16,6 +16,7 @@ Paths and conventions are those of the create skill (`PLUGIN`, `GUIDE`, `WS`). `
 |---|---|
 | `--check` | Report drift only (FR-025a); change nothing; no superpowers needed |
 | `--adopt` | Adopt a guide without a cc-guide baseline or source blocks (FR-028) |
+| `--pages` | Set up GitHub Pages for this guide (section 3a); no drift run, no superpowers needed |
 | `--to ID=REF` | Repeatable; target revision per source (default: each source's tracked branch head) |
 | `--input PATH_OR_URL` | Repeatable; new inputs to register |
 | `--rigor fast\|standard\|strict` | Default from `guide.yaml` |
@@ -23,7 +24,7 @@ Paths and conventions are those of the create skill (`PLUGIN`, `GUIDE`, `WS`). `
 
 ## 1. Preflight
 
-The `/guide:evolve` command runs `guide:preflight` first. When its result line is not already in this conversation (the skill was invoked directly, as it is on harnesses with no command layer), invoke `guide:preflight` with `evolve` (and `--check` when given, with `--dir`) now. Stop when it stops. superpowers is required only without `--check`.
+The `/guide:evolve` command runs `guide:preflight` first. When its result line is not already in this conversation (the skill was invoked directly, as it is on harnesses with no command layer), invoke `guide:preflight` with `evolve` (and `--check` or `--pages` when given, with `--dir`) now. Stop when it stops. superpowers is required only without `--check` and `--pages`.
 
 ## 2. Check-only mode (`--check`)
 
@@ -40,10 +41,25 @@ For a guide that has no cc-guide `baseline.yaml` or no source blocks. Regular ev
 5. `uv run tools/guide/adopt.py report` lists the pages without source blocks. Plan one task per page ("add the source block and verify every statement against the pinned sources"), get the author's approval, and execute it with the page-task setup and superpowers `subagent-driven-development` exactly as in create sections 6d to 8 (same reviews, same rulings).
 6. Run `make check`, commit the first cc-guide baseline (`chore(baseline): adopt guide into cc-guide`), and write the run summary with `--command adopt`. Regular evolve runs only after adoption completed.
 
+## 3a. GitHub Pages (`--pages`)
+
+Sets up the GitHub Pages workflow of create section 9 step 2 for an existing guide, also one kept in a subdirectory of a code repository (for example `docs/guide/`). No drift run, no superpowers, no subagents. GitHub Pages publishes from the repository the guide already lives in; no new remote is created. Run the steps in order and stop at the first refusal, writing nothing:
+
+1. **Format**: refuse gfm and embedded guides ("A gfm guide renders on GitHub without a site build.").
+2. **Toolkit**: when `tools/guide/VERSION` is below 0.5.0, offer the toolkit refresh of section 4 step 1 first and commit it on its own. Without the refresh, stop (older toolkits reject the `pages` block and cannot build an Antora guide in a subdirectory).
+3. **Repository**: the git root is `git rev-parse --show-toplevel`; the guide's path inside the repository is `git rev-parse --show-prefix` without the trailing slash (`.` at the root).
+4. **Existing workflow**: refuse when `<git root>/.github/workflows/guide-pages.yml` exists. Never overwrite a workflow.
+5. **Remote**: read owner and repository from `git remote get-url origin`. When there is no `origin`, or it is not a GitHub remote (for example GitLab), stop and say that the workflow targets GitHub Pages and publishes from the guide's own GitHub repository.
+6. **Existing Pages site**: run `gh api repos/<owner>/<repo>/pages`. When it returns a site, stop: there is one Pages site per repository, and the guide cannot take over the existing site (for example the project website). A 404 means no site yet.
+7. **Visibility**: `gh repo view --json visibility`. For a private repository, give the warning of create intake question 14 (the site is public on the web; Pages from a private repository needs a paid GitHub plan) and ask whether to continue.
+8. **Build check**: run `make site` and the leak check (`uv run tools/guide/leakcheck.py build/site`). Stop on a failure and show it, so the repository never gets a workflow that fails on every push.
+9. **Set up**: follow create section 9 step 2 with two differences: render the workflow to `<git root>/.github/workflows/guide-pages.yml`, with `{{GUIDE_DIR}}` set to the guide's path inside the repository, and commit from the git root. `gh api -X POST repos/<owner>/<repo>/pages -f build_type=workflow` runs only after the author approves.
+10. **Report** as create section 9 step 6 does for Pages (URL, the enable command when Pages was not switched on, the visibility note for a private repository). Ask before pushing; push only after approval.
+
 ## 4. Drift and impact (FR-025 to FR-027, FR-005a)
 
 0. **Adoption gate (FR-028)**: run `uv run tools/guide/guidecfg.py validate` and `uv run tools/guide/adopt.py report`. When the guide has no valid cc-guide baseline, or pages lack source blocks, stop and offer `/guide:evolve --adopt`; the regular evolve runs only on an adopted guide.
-1. **Toolkit version**: compare `tools/guide/VERSION` with `$PLUGIN/toolkit/VERSION`. When the plugin's is newer, offer `bash "$PLUGIN/scripts/scaffold-project.sh" --format <format> --toolkit-only "$GUIDE"` and commit it separately (`chore: update guide toolkit to <version>`). From toolkit 0.2.0 on, an Antora guide can carry its own branding: a `branding` block in `guide.yaml` (logo text or own logo, alt text, footer, favicon, accent color) and the overlay directory `ui/supplemental/`, with no change to the Makefile or the playbooks (see `$PLUGIN/docs/branding.md`). Mention this when the author asks about the guide's look. A `branding` block added before the refresh fails validation with `guide.yaml:branding: unknown key`; the refresh resolves it. Toolkit 0.3.0 adds the claims gate (`diagram_check.py claims`, FR-044); after the refresh, diagrams without a `diagrams/<name>.claims.yaml` get one in their next task. Toolkit 0.4.0 adds the neutral theme for Antora guides: `theme: neutral` (vendored Red Hat fonts, a red rule under the header, no Google Fonts request) and `wordmark` (a text logo without the Red Hat hat). When a refresh moves an Antora guide from below 0.4.0 to 0.4.0 or later, name both keys in the summary and point to `$PLUGIN/docs/branding.md`; never edit the guide's `branding` block yourself, the author decides (specs/003-neutral-branding FR-025).
+1. **Toolkit version**: compare `tools/guide/VERSION` with `$PLUGIN/toolkit/VERSION`. When the plugin's is newer, offer `bash "$PLUGIN/scripts/scaffold-project.sh" --format <format> --toolkit-only "$GUIDE"` and commit it separately (`chore: update guide toolkit to <version>`). From toolkit 0.2.0 on, an Antora guide can carry its own branding: a `branding` block in `guide.yaml` (logo text or own logo, alt text, footer, favicon, accent color) and the overlay directory `ui/supplemental/`, with no change to the Makefile or the playbooks (see `$PLUGIN/docs/branding.md`). Mention this when the author asks about the guide's look. A `branding` block added before the refresh fails validation with `guide.yaml:branding: unknown key`; the refresh resolves it. Toolkit 0.3.0 adds the claims gate (`diagram_check.py claims`, FR-044); after the refresh, diagrams without a `diagrams/<name>.claims.yaml` get one in their next task. Toolkit 0.4.0 adds the neutral theme for Antora guides: `theme: neutral` (vendored Red Hat fonts, a red rule under the header, no Google Fonts request) and `wordmark` (a text logo without the Red Hat hat). When a refresh moves an Antora guide from below 0.4.0 to 0.4.0 or later, name both keys in the summary and point to `$PLUGIN/docs/branding.md`; never edit the guide's `branding` block yourself, the author decides (specs/003-neutral-branding FR-025). Toolkit 0.5.0 adds the `pages` block in `guide.yaml` and builds Antora guides kept in a repository subdirectory; mention `/guide:evolve --pages` when the repository has no `.github/workflows/guide-pages.yml`.
 2. **Drift report**: `uv run tools/guide/drift.py --check --format json` (exit 10 means drift). Show the Markdown form to the author. An embedded guide's `self` source is reported in fingerprint mode and never as `pin-missing` (section 8); before planning, also run the front page check of section 8 (hand edits). Sources reported `unchecked` cannot be verified: name them and ask whether to continue without updating them. A `pin-missing` source needs a new pin before anything else: ask for the revision and use it as that source's target.
 3. **Targets**: `--to` values, or each source's tracked branch head from the report. Resolve each to a full SHA.
 4. **Change requests (FR-027)**: for every recorded change request, decide with the author from the report:

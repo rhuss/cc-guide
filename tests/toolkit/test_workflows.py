@@ -92,3 +92,25 @@ def test_create_skill_offers_pages():
     assert "for a private remote, that the site is public on the web" in text
     assert "`site.url` in `site.yml`" in text and "`site_url` in `mkdocs.yml`" in text
     assert chr(0x2014) not in text and chr(0x2013) not in text
+
+
+GUIDE = Path(__file__).resolve().parents[2] / "guide"
+
+
+def test_evolve_pages_mode():
+    evolve = (GUIDE / "skills" / "evolve" / "SKILL.md").read_text()
+    command = (GUIDE / "commands" / "evolve.md").read_text()
+    preflight = (GUIDE / "skills" / "preflight" / "SKILL.md").read_text()
+    for text in (evolve, command):
+        assert "[--pages]" in text.split("argument-hint:")[1].splitlines()[0]
+    assert "## 3a. GitHub Pages (`--pages`)" in evolve
+    for phrase in ("git rev-parse --show-toplevel", "gh api repos/<owner>/<repo>/pages",
+                   "gh repo view --json visibility", "one Pages site per repository",
+                   "`{{GUIDE_DIR}}` set to the guide's path inside the repository",
+                   "not a GitHub remote", "`make site` and the leak check",
+                   "create section 9 step 2", "Toolkit 0.5.0 adds"):
+        assert phrase in evolve, phrase
+    assert "without `--check` or `--pages`" in preflight
+    assert (GUIDE / "toolkit" / "VERSION").read_text().strip() == "0.5.0"
+    for text in (evolve, command, preflight):
+        assert chr(0x2014) not in text and chr(0x2013) not in text

@@ -109,7 +109,7 @@ tools/guide/          the vendored toolkit (checks, drift, leak check, PDF print
 
 The toolkit lives in the guide project so the scheduled drift check (`.github/workflows/guide-drift.yml`, opt-in) runs in CI without Claude Code.
 
-Antora and MkDocs guides can also opt into GitHub Pages: `/guide:create` then installs `.github/workflows/guide-pages.yml`, which builds the shareable view, runs the leak check, and publishes it at `https://<owner>.github.io/<repo>/` with no separate pages repository or branch.
+Antora and MkDocs guides can also opt into GitHub Pages: `/guide:create` then installs `.github/workflows/guide-pages.yml`, which builds the shareable view, runs the leak check, and publishes it at `https://<owner>.github.io/<repo>/` with no separate pages repository or branch. Existing Antora and MkDocs guides, also ones kept in a subdirectory of a code repository, get the same workflow with `/guide:evolve --pages`.
 
 ## Development
 
