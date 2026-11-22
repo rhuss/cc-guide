@@ -73,3 +73,28 @@ When opted in, after the final review:
 - Whether `site.url` lives in the committed playbooks or is injected only by `playbook.py`.
 - Action versions, pinned to current majors like the existing templates.
 - What a run reports when the author declines enabling Pages: the deploy job fails until Pages is switched on; the run summary must say so.
+
+## Follow-up (2026-11-22): `/guide:evolve --pages` for existing guides
+
+### Intent
+
+Guides created before the Pages option should get the same setup without waiting for drift. Some existing Antora and MkDocs guides live in a subdirectory of a code repository (for example `docs/guide/`, found by nested discovery); they publish from that same repository, never from a new remote.
+
+### Finding
+
+An Antora guide in a subdirectory does not build today, locally or in CI: Antora requires a local content source (`url: .`) to be the root of a git repository and fails with "Local content source must be a git repository". A playbook whose source points at the git root with `start_path: docs/guide/content` builds (verified on a scratch host repository, 5 pages). MkDocs does not read git and is unaffected.
+
+### Approaches
+
+- **A: a separate mode `/guide:evolve --pages` (chosen).** Like `--check` and `--adopt`: no drift run, no superpowers, no subagents. Pages setup is unrelated to drift, so it must not wait for a source change.
+- **B: an offer inside a regular evolve run.** Dropped: only reachable when sources drifted.
+- **C: a new `/guide:pages` command.** Dropped: more surface (command, skill, preflight wiring) for the same steps.
+
+### Design
+
+- **Toolkit (`playbook.py`)**: when the guide root is not the top level of its git working tree, generate the playbook and point every `url: .` content source at the working tree's top level (the main repository for a linked worktree, as today) with `start_path` prefixed by the guide's path inside the repository (`git rev-parse --show-prefix`). This also fixes local builds, preview, and PDF for such guides.
+- **Toolkit version** 0.5.0; evolve's toolkit note names the `pages` block and `--pages`. Plugin manifest versions stay unchanged.
+- **Workflow template**: the upload `path` becomes `{{GUIDE_DIR}}/build/site` (the working-directory default applies to `run` steps only). Create keeps rendering `{{GUIDE_DIR}}` as `.`.
+- **Evolve `--pages` mode**: refuses gfm and embedded guides; offers the toolkit refresh first when `tools/guide/VERSION` is below 0.5.0; finds the git root (`git rev-parse --show-toplevel`) and the guide's path in it; refuses when `<git root>/.github/workflows/guide-pages.yml` exists; reads owner and repository from `origin` (an existing GitHub remote is required); stops when `gh api repos/<owner>/<repo>/pages` shows an existing Pages site (one site per repository); warns for a private repository (`gh repo view --json visibility`); then follows create section 9 step 2 with the workflow at the git root and `{{GUIDE_DIR}}` set to the guide path. `gh api` and push only after approval. Commits stay local otherwise.
+- **Preflight and the command wrapper**: `--pages` needs neither superpowers nor parallel subagents.
+- **Tests**: `playbook.py` for a guide in a subdirectory (main checkout and linked worktree), the workflow upload path for `.` and a subdirectory, the evolve, preflight, and command texts, and the toolkit version.
