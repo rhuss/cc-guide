@@ -3,6 +3,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import pytest
+
 REPO = Path(__file__).resolve().parents[2]
 
 
@@ -196,3 +198,34 @@ def test_visuals_template_and_capture_context(tmp_path):
         (tools / "templates" / "visuals.yaml").unlink()
         proc = run(plugin / "scripts/scaffold-project.sh", "--format", "gfm", "--toolkit-only", guide)
         assert proc.returncode == 0, proc.stderr
+
+
+# --- --in-repo (brainstorm/11-in-repo-guide) -----------------------------------------
+
+
+def test_in_repo_scaffold(tmp_path):
+    guide = tmp_path / "host" / "docs" / "guide"
+    proc = run(REPO / "guide/scripts/scaffold-project.sh", "--format", "antora", "--title", "T", "--in-repo", guide)
+    assert proc.returncode == 0, proc.stderr
+    assert not (guide / "internal").exists()
+    assert (guide / "site.yml").is_file() and (guide / "tools" / "guide" / "adapter.yaml").is_file()
+    assert (guide / ".gitignore").read_text().splitlines().count("confidential.local.yaml") == 1
+    assert run(REPO / "guide/scripts/scaffold-project.sh", "--format", "antora", "--title", "T", "--in-repo",
+               guide).returncode == 0
+    assert (guide / ".gitignore").read_text().splitlines().count("confidential.local.yaml") == 1
+
+
+@pytest.mark.parametrize("args", [["--format", "gfm", "--in-repo"],
+                                  ["--format", "antora", "--in-repo", "--embedded"]])
+def test_in_repo_scaffold_refusals(tmp_path, args):
+    proc = run(REPO / "guide/scripts/scaffold-project.sh", *args, "--title", "T", tmp_path / "g")
+    assert proc.returncode == 2 and not (tmp_path / "g").exists()
+
+
+def test_in_repo_scaffold_refuses_unrelated_directory(tmp_path):
+    target = tmp_path / "guide"
+    target.mkdir()
+    (target / "notes.txt").write_text("mine\n")
+    proc = run(REPO / "guide/scripts/scaffold-project.sh", "--format", "mkdocs", "--title", "T", "--in-repo", target)
+    assert proc.returncode == 2 and "not a guide project" in proc.stderr
+    assert sorted(p.name for p in target.iterdir()) == ["notes.txt"]

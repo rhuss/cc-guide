@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Scaffold a guide project from an adapter, or refresh its vendored toolkit.
-#   usage: scaffold-project.sh --format antora|mkdocs|gfm --title TITLE [--embedded] DIR
+#   usage: scaffold-project.sh --format antora|mkdocs|gfm --title TITLE [--embedded | --in-repo] DIR
 #          scaffold-project.sh --format FORMAT --toolkit-only DIR
 # Copies guide/adapters/<format>/scaffold/ into DIR (never overwriting existing
 # files), renders {{TITLE}}, and installs the toolkit as DIR/tools/guide/:
@@ -17,17 +17,22 @@
 # confidential.local.yaml in the guide's .gitignore. It refuses a DIR that exists, is not
 # empty, and holds neither guide.yaml nor tools/guide/adapter.yaml (it never merges into an
 # unrelated directory).
+# --in-repo (antora and mkdocs, brainstorm/11-in-repo-guide) scaffolds a guide in a
+# subdirectory of an existing repository that is not embedded: no internal/ part and
+# confidential.local.yaml in the guide's .gitignore; the README stays the author's. It
+# refuses an unrelated non-empty DIR like --embedded, and gfm (use --embedded).
 set -euo pipefail
 
-usage() { echo "usage: scaffold-project.sh --format antora|mkdocs|gfm (--title TITLE [--embedded] | --toolkit-only) DIR" >&2; exit 2; }
+usage() { echo "usage: scaffold-project.sh --format antora|mkdocs|gfm (--title TITLE [--embedded | --in-repo] | --toolkit-only) DIR" >&2; exit 2; }
 
-format="" title="" toolkit_only=0 embedded=0 dir=""
+format="" title="" toolkit_only=0 embedded=0 in_repo=0 dir=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --format) [[ $# -ge 2 ]] || usage; format=$2; shift 2 ;;
     --title) [[ $# -ge 2 ]] || usage; title=$2; shift 2 ;;
     --toolkit-only) toolkit_only=1; shift ;;
     --embedded) embedded=1; shift ;;
+    --in-repo) in_repo=1; shift ;;
     -*) usage ;;
     *) [[ -z "$dir" ]] || usage; dir=$1; shift ;;
   esac
@@ -39,6 +44,23 @@ plugin=$(cd "$(dirname "$0")/.." && pwd)
 adapter="$plugin/adapters/$format"
 [[ -f "$adapter/adapter.yaml" ]] || { echo "unknown format: $format (no $adapter/adapter.yaml)" >&2; exit 2; }
 overlay=""
+skip_internal=0
+if [[ $embedded -eq 1 && $in_repo -eq 1 ]]; then
+  echo "--embedded and --in-repo exclude each other" >&2
+  exit 2
+fi
+if [[ $in_repo -eq 1 && $toolkit_only -eq 0 ]]; then
+  if [[ $format == gfm ]]; then
+    echo "--in-repo is for antora and mkdocs guides; a gfm guide in a repository uses --embedded" >&2
+    exit 2
+  fi
+  if [[ -d "$dir" && ! -f "$dir/guide.yaml" && ! -f "$dir/tools/guide/adapter.yaml" \
+        && -n "$(ls -A "$dir" 2>/dev/null)" ]]; then
+    echo "$dir exists, is not empty, and is not a guide project; choose another guide subdirectory" >&2
+    exit 2
+  fi
+  skip_internal=1
+fi
 if [[ $embedded -eq 1 && $toolkit_only -eq 0 ]]; then
   if [[ $format != gfm ]]; then
     echo "embedded guides support the gfm format only in this release (got $format)" >&2
@@ -51,6 +73,7 @@ if [[ $embedded -eq 1 && $toolkit_only -eq 0 ]]; then
     exit 2
   fi
   overlay="$adapter/embedded"
+  skip_internal=1
 fi
 
 mkdir -p "$dir"
@@ -61,7 +84,7 @@ if [[ $toolkit_only -eq 0 ]]; then
   { (cd "$adapter/scaffold" && find . -type f); if [[ -n "$overlay" ]]; then (cd "$overlay" && find . -type f); fi; } |
     sort -u | while read -r rel; do
     rel=${rel#./}
-    if [[ -n "$overlay" && ( $rel == internal/* ) ]]; then
+    if [[ $skip_internal -eq 1 && ( $rel == internal/* ) ]]; then
       continue
     fi
     src="$adapter/scaffold/$rel"
@@ -76,8 +99,8 @@ if [[ $toolkit_only -eq 0 ]]; then
     mkdir -p "$(dirname "$target")"
     cp "$src" "$target"
   done
-  if [[ -n "$overlay" ]] && ! grep -qx 'confidential.local.yaml' "$dir/.gitignore" 2>/dev/null; then
-    printf '%s\n' '# Confidential terms and input locations of an embedded guide (never committed)' \
+  if [[ $skip_internal -eq 1 ]] && ! grep -qx 'confidential.local.yaml' "$dir/.gitignore" 2>/dev/null; then
+    printf '%s\n' '# Confidential terms and input locations of a guide inside a repository (never committed)' \
       'confidential.local.yaml' >> "$dir/.gitignore"
   fi
   # Render {{TITLE}} in text files that contain it.
