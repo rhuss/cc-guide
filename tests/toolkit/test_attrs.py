@@ -224,3 +224,12 @@ def test_author_attr_marker_is_no_unknown_attribute_error(emb_region):
     # check mode must not raise on the author marker and must report only the region
     changes = attrs.regions(emb_region, baseline, write=False)
     assert [c.name for c in changes] == ["self-commit-short"]
+
+
+def test_list_cli_prints_every_value_one_per_line(render_fixture_guide):
+    root = render_fixture_guide
+    cmd = [sys.executable, str(TOOLKIT / "attrs.py"), "list", "--root", str(root)]
+    out = subprocess.run(cmd, capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+    expected = attrs.values(guidecfg.load_baseline(root))
+    assert out.stdout.splitlines() == [f"{k}={v}" for k, v in expected.items()]

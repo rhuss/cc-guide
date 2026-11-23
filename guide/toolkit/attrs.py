@@ -16,6 +16,8 @@ out when the host has no GitHub `origin` (no `web`).
 Usage:
   uv run tools/guide/attrs.py export --format antora [--root DIR]
       prints shell-quoted `--attribute name=value` arguments for the Antora CLI
+  uv run tools/guide/attrs.py list [--root DIR]
+      prints every baseline value as `name=value`, one per line (any format)
   uv run tools/guide/attrs.py regions [--write] [--root DIR] DIR...
       generated regions in Markdown pages (gfm adapter):
         <!-- guide:attr NAME -->VALUE<!-- /guide:attr -->
@@ -158,6 +160,8 @@ def main(argv: list[str] | None = None) -> int:
     e = sub.add_parser("export")
     e.add_argument("--format", required=True, choices=["antora"])
     e.add_argument("--root", type=Path, default=Path("."))
+    ls = sub.add_parser("list")
+    ls.add_argument("--root", type=Path, default=Path("."))
     r = sub.add_parser("regions")
     r.add_argument("--write", action="store_true")
     r.add_argument("--root", type=Path, default=Path("."))
@@ -173,6 +177,10 @@ def main(argv: list[str] | None = None) -> int:
     except guidecfg.ConfigError as err:
         print(err, file=sys.stderr)
         return 1
+    if args.cmd == "list":
+        for name, value in values(baseline).items():
+            print(f"{name}={value}")
+        return 0
     if args.cmd == "export":
         print(shlex.join(export(baseline, args.format)))
         return 0
