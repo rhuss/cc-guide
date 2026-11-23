@@ -10,7 +10,7 @@
   baseline.yaml  pinned sources and change requests
   inputs.yaml    input register (references only, never raw content)
 
-  confidential.local.yaml  (embedded guides, git-ignored) confidential terms, patterns,
+  confidential.local.yaml  (embedded and in-repo guides, git-ignored) confidential terms, patterns,
                  and the real locations of `local:<id>` inputs (specs/005-embedded-guide R9)
 
 Usage: uv run tools/guide/guidecfg.py validate [--allow-missing-front-page] [--root DIR]
@@ -66,7 +66,7 @@ FINDING_ID_RE = re.compile(r"^UF-\d+$")
 SELF_ID = "self"                       # the reserved id of the host repository source
 VISUAL_ID = "visual"                   # reserved: visual:<name> cites a captured visual
 DEFAULT_FRONT_PAGE = "../README.md"    # embedded.front_page when guide.yaml does not set it
-LOCAL_FILE = "confidential.local.yaml"  # git-ignored confidential data of an embedded guide
+LOCAL_FILE = "confidential.local.yaml"  # git-ignored confidential data of an embedded or in-repo guide
 PR_CHECK = ("off", "on")
 
 
@@ -339,6 +339,14 @@ def host_toplevel(root: Path) -> Path | None:
         return None
     out = proc.stdout.strip()
     return Path(out) if proc.returncode == 0 and out else None
+
+
+def in_repo_guide(root: Path) -> bool:
+    """True for a guide inside a git repository but not at its top level (for example
+    docs/guide/ of a code repository); embedded guides are in-repo guides too. Such a guide
+    may keep confidential data in confidential.local.yaml (brainstorm/11-in-repo-guide)."""
+    top = host_toplevel(root)
+    return top is not None and top.resolve() != Path(root).resolve()
 
 
 def _norm(root: Path, rel: str) -> Path:
@@ -654,9 +662,10 @@ def load_guide(root: Path) -> Guide:
         pages = _load_pages(c, data.get("pages"), fmt)
 
     c.raise_if_any()
-    # confidential.local.yaml belongs to embedded guides only; a separate guide keeps its
-    # terms in guide.yaml and ignores a stray copy (FR-029)
-    local_terms, local_patterns = _load_local_confidential(root) if embedded is not None else ([], [])
+    # confidential.local.yaml belongs to embedded and in-repo guides; a guide at the top of
+    # its own repository keeps its terms in guide.yaml and ignores a stray copy (FR-029)
+    in_repo = embedded is not None or in_repo_guide(root)
+    local_terms, local_patterns = _load_local_confidential(root) if in_repo else ([], [])
     return Guide(root=root, schema=int(schema), title=title, format=fmt, personas=personas,
                  sections=sections, rigor=rigor, internal_enabled=internal_enabled,
                  confidential_terms=terms + local_terms, confidential_patterns=patterns + local_patterns,
@@ -923,8 +932,9 @@ def load_inputs(root: Path) -> Inputs:
                 if not isinstance(value, str) or not SHA_RE.match(value):
                     c.add(f"{key}.{name}", f"required with a self: location (40 hex characters, got {value!r})")
         elif location.startswith("local:"):
-            if not embedded:
-                c.add(f"{key}.location", "local: locations are allowed only in embedded guides")
+            if not (embedded or in_repo_guide(root)):
+                c.add(f"{key}.location", "local: locations are allowed only in embedded guides "
+                                         "and guides inside a repository")
             else:
                 if local is None:
                     try:

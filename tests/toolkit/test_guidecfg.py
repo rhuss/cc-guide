@@ -820,13 +820,16 @@ def test_self_input_path_inside_guide_is_not_refused(embedded):
     assert guidecfg.load_inputs(embedded).get("pointer") is not None
 
 
-def test_local_input_only_in_embedded_guides(embedded, tmp_path):
+def test_local_input_only_in_embedded_or_in_repo_guides(embedded, tmp_path):
     write_local(embedded, {"inputs": {"call-1": str(tmp_path / "n.txt")}})
     (embedded / "inputs.yaml").write_text(yaml.safe_dump({"inputs": [
         {"id": "call-1", "kind": "notes", "location": "local:call-1"}]}))
     guidecfg.load_inputs(embedded)
     edit(embedded / "guide.yaml", lambda d: d.pop("embedded"))
-    assert "local:" in config_error(guidecfg.load_inputs, embedded)
+    guidecfg.load_inputs(embedded)            # still inside the host repository: an in-repo guide
+    outside = tmp_path / "outside"
+    shutil.copytree(embedded, outside)
+    assert "local:" in config_error(guidecfg.load_inputs, outside)
 
 
 
@@ -837,7 +840,7 @@ def test_confidential_input_of_embedded_guide_must_be_local(embedded, tmp_path):
     message = config_error(guidecfg.load_inputs, embedded)
     assert "local:<id>" in message and "confidential.local.yaml" in message
     edit(embedded / "guide.yaml", lambda d: d.pop("embedded"))
-    guidecfg.load_inputs(embedded)   # a separate guide keeps confidential locations as today
+    guidecfg.load_inputs(embedded)   # an in-repo guide may keep confidential locations
 
 
 # --- pages() with the front page --------------------------------------------------
@@ -1044,3 +1047,45 @@ def test_visual_source_id_reserved(render_fixture_guide):
     with pytest.raises(ConfigError) as err:
         guidecfg.load_baseline(render_fixture_guide)
     assert "the source id 'visual' is reserved for visual citations" in str(err.value) + " ".join(err.value.lines())
+
+
+# --- in-repo guides (brainstorm/11-in-repo-guide) ------------------------------------
+
+
+def in_repo(tmp_path: Path) -> Path:
+    """A standalone guide (no embedded block) in docs/guide of a host repository."""
+    host = tmp_path / "host"
+    root = host / "docs" / "guide"
+    root.mkdir(parents=True)
+    subprocess.run(["git", "init", "-q", "-b", "main", str(host)], check=True)
+    return make_gfm_guide(root)
+
+
+def test_in_repo_guide_detection(tmp_path, render_fixture_guide):
+    root = in_repo(tmp_path)
+    assert guidecfg.in_repo_guide(root)
+    assert not guidecfg.in_repo_guide(root.parent.parent)        # the repository root itself
+    assert not guidecfg.in_repo_guide(render_fixture_guide)       # not inside any git repository
+
+
+def test_in_repo_guide_reads_local_confidential(tmp_path):
+    root = in_repo(tmp_path)
+    write_local(root, {"confidential_terms": ["ACME Corp"]})
+    assert guidecfg.load_guide(root).confidential_terms == ["ACME Corp"]
+
+
+def test_in_repo_guide_accepts_local_inputs(tmp_path):
+    root = in_repo(tmp_path)
+    notes = tmp_path / "n.txt"
+    notes.write_text("n\n")
+    write_local(root, {"inputs": {"call-1": str(notes)}})
+    (root / "inputs.yaml").write_text(yaml.safe_dump({"inputs": [
+        {"id": "call-1", "kind": "notes", "location": "local:call-1", "confidential": True}]}))
+    assert guidecfg.load_inputs(root).get("call-1").path(root) == notes
+
+
+def test_in_repo_guide_does_not_require_local_inputs(tmp_path):
+    root = in_repo(tmp_path)
+    (root / "inputs.yaml").write_text(yaml.safe_dump({"inputs": [
+        {"id": "call-1", "kind": "notes", "location": str(tmp_path / "acme.txt"), "confidential": True}]}))
+    guidecfg.load_inputs(root)
