@@ -13,7 +13,7 @@ Embedded mode is offered when create runs at the root of an existing git reposit
 
 ## Limits in this release
 
-- GitHub Markdown (`gfm`) only. Antora and MkDocs guides live in their own repository.
+- GitHub Markdown (`gfm`) only. An Antora or MkDocs guide can live in a subdirectory of the repository as an in-repo guide (`/guide:create` offers it), but it is not embedded: the README stays the author's and the repository is no `self` source.
 - No internal part. Everything in the repository is visible to its readers.
 - The repository root only; a subdirectory of a monorepo is not a valid target.
 - The workflows (scheduled drift check, pull request check) require a GitHub-hosted repository.

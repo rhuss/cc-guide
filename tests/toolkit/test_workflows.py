@@ -172,3 +172,16 @@ def test_evolve_visuals_mode_requires_toolkit_0_6():
     assert "below 0.6.0" in section and "visuals.py init" in section
     assert "Toolkit 0.6.0 adds captured visuals" in evolve
     assert (GUIDE / "toolkit" / "VERSION").read_text().strip() == "0.6.0"
+
+
+def test_create_skill_offers_in_repo_guides():
+    text = SKILL.read_text()
+    for phrase in ("add an Antora or MkDocs guide in a subdirectory (README untouched)",
+                   "default `docs/guide`", "--in-repo", "In-repo guide",
+                   "`--format antora` or `--format mkdocs` at a repository root selects the in-repo guide",
+                   "confidential.local.yaml", "no internal part",
+                   "evolve section 3a steps 2 to 6", "`{{BRANCH}}` set to the default branch",
+                   "inside a git repository but not at its root"):
+        assert phrase in text, phrase
+    assert "is inside the repository `<toplevel>` but not its root. Embedded guides live" not in text
+    assert chr(0x2014) not in text and chr(0x2013) not in text
