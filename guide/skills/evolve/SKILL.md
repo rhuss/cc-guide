@@ -121,6 +121,14 @@ An embedded guide lives in a subdirectory of the repository it documents; the ho
 - **Outside the guide subdirectory**, evolve changes only the front page and, when a page that a stub or the front page links to is renamed or removed, the link targets in those stubs (`uv run tools/guide/embed.py retarget <old>=<new> ...`, both paths relative to the host repository root, for example `guide/docs/admin/setup.md=guide/docs/admin/install.md`). It never creates, moves, or removes host files, and it never repeats the consolidation (FR-032).
 - **New baseline**: `uv run tools/guide/fetch.py rebaseline --to self=<sha> ...` recomputes the fingerprints and stores the front page blob. After the final `make check`, run `uv run tools/guide/embed.py front-page-status --record`, then commit `baseline.yaml`.
 
+## 9. In-repo guides (brainstorm/11-in-repo-guide)
+
+An in-repo guide is an Antora or MkDocs guide in a subdirectory of a repository without an `embedded` block (`guidecfg.py` `in_repo_guide`). Its files are committed to that repository, which is often public, so evolve keeps confidential data out of them as for embedded guides:
+
+- **Inputs** (section 4 step 5): a confidential input is registered as `local:<id>` in `inputs.yaml`, with its real location only under `inputs` in `confidential.local.yaml` (git-ignored). Run summaries and findings name it by id only (`runs.py` masks the real locations).
+- **Confidential terms and patterns** go to `confidential.local.yaml`, never into `guide.yaml`, also when `--adopt` writes `guide.yaml` for an in-repo guide (section 3 step 4).
+- Everything else (drift, impact set, baseline) works as for a guide in its own repository; the repository is no `self` source unless the guide pins it like any other source.
+
 ## Resume
 
 Rerunning `/guide:evolve` while a ledger for `docs/guide/plans/<run-id>.md` has an unfinished task resumes at that task, exactly as in create section 2 (`runs.py resume --workspace <WS>`). A run whose tasks are complete but whose baseline is not yet written continues at section 6.

@@ -258,13 +258,13 @@ def _validation_text(root: Path, run_id: str) -> str:
 
 
 def _local_locations(root: Path) -> dict[str, str]:
-    """Real locations of `local:<id>` inputs (embedded guides) -> `local:<id>`.
+    """Real locations of `local:<id>` inputs (embedded and in-repo guides) -> `local:<id>`.
 
     Run summaries and findings are committed; they name confidential inputs by id only
     (specs/005-embedded-guide FR-006). Each location is listed as written, expanded, and
     resolved, so every spelling is masked.
     """
-    if guidecfg.embedded_front_page(root) is None:
+    if guidecfg.embedded_front_page(root) is None and not guidecfg.in_repo_guide(root):
         return {}
     try:
         locations = guidecfg._local_inputs(root)

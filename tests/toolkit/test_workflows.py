@@ -185,3 +185,17 @@ def test_create_skill_offers_in_repo_guides():
         assert phrase in text, phrase
     assert "is inside the repository `<toplevel>` but not its root. Embedded guides live" not in text
     assert chr(0x2014) not in text and chr(0x2013) not in text
+
+
+def test_evolve_keeps_in_repo_confidential_data_local():
+    evolve = (GUIDE / "skills" / "evolve" / "SKILL.md").read_text()
+    section = evolve.split("## 9. In-repo guides")[1].split("\n## ")[0]
+    for phrase in ("guidecfg.py` `in_repo_guide`", "registered as `local:<id>`",
+                   "`confidential.local.yaml`", "never into `guide.yaml`", "`--adopt`"):
+        assert phrase in section, phrase
+
+
+def test_create_keeps_separate_guides_possible_inside_a_parent_repository():
+    text = SKILL.read_text()
+    assert "a separate guide in its own repository nested here" in text
+    assert "stop and suggest an empty directory outside the repository" not in text

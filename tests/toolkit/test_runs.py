@@ -262,3 +262,19 @@ def test_summary_and_findings_never_name_local_locations(workspace, mini_host, t
                                    "summary": "README is wrong.", "evidence": f"{secret} says so"})
     stored = (root / "findings" / "upstream.yaml").read_text()
     assert fid == "UF-1" and str(secret) not in stored and "local:call-1 says so" in stored
+
+
+def test_in_repo_guide_masks_local_locations(mini_host, tmp_path):
+    """brainstorm/11-in-repo-guide: a guide in a repository subdirectory without an embedded
+    block accepts local: inputs, so committed run files must mask their locations too."""
+    from conftest import make_embedded_guide
+    host, commit = mini_host
+    root = make_embedded_guide(host, commit)
+    data = yaml.safe_load((root / "guide.yaml").read_text())
+    data.pop("embedded")
+    (root / "guide.yaml").write_text(yaml.safe_dump(data, sort_keys=False))
+    secret = tmp_path / "secret" / "acme-call.txt"
+    secret.parent.mkdir()
+    secret.write_text("call notes\n")
+    (root / "confidential.local.yaml").write_text(yaml.safe_dump({"inputs": {"call-1": str(secret)}}))
+    assert runs.mask_local(root, f"see {secret}") == "see local:call-1"
