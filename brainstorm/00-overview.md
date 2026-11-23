@@ -15,7 +15,8 @@ Last updated: 2026-11-22
 | 07 | 2026-11-19 | nested-guide-discovery | active | - | [#4](https://github.com/rhuss/cc-guide/issues/4) |
 | 08 | 2026-11-21 | pages-deploy | active | - | - |
 | 09 | 2026-11-22 | captured-visuals | active | - | - |
-| 09 | 2026-11-23 | antora-embedded-guide | parked | - | - |
+| 10 | 2026-11-23 | antora-embedded-guide | parked | - | - |
+| 11 | 2026-11-23 | in-repo-guide | active | - | - |
 
 ## Open Threads
 - How does cc-guide detect superpowers version drift (renamed skills or scripts), and what is the fallback? (from #01)
@@ -63,7 +64,7 @@ Last updated: 2026-11-22
 - What does the review of an annotated screenshot check: that the highlighted selector exists in the sidecar and that the callout label matches the page text? (from #09)
 
 ## Parked Ideas
-- Antora guides that document the repository they live in (#09)
+- Antora guides that document the repository they live in (#10)
   Reason: three decisions made (embedded semantics, guide-owned README region, links to the published site); approach and open questions left for a full brainstorm and spec run
 - Strict rigor without a claim ledger (#03)
   Reason: not decided; approach A proposed, to be implemented on its own branch
