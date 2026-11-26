@@ -11,7 +11,7 @@ git clone <repo> /tmp/embedded-try && cd /tmp/embedded-try
 claude   # then: /guide:create --embedded
 ```
 
-1. Create offers embedded mode at the repository root (or `--embedded` skips the question). On the default branch it offers a working branch first.
+1. Create offers embedded mode at the repository root (or `--embedded` skips the question). On the default branch it offers a working branch first, in a new worktree by default (`.claude/worktrees/guide-<slug>` on Claude Code).
 2. The intake asks for the guide subdirectory (default `guide`), the developer README (default `DEVELOPMENT.md`), and the optional pull request check; it does not ask for the format, an internal part, or a remote.
 3. The move plan is shown before anything outside `guide/` changes. Decline once: `git status --porcelain -- . ':(exclude)guide'` must be empty, and create offers to remove the uncommitted `guide/`.
 4. Run again and approve the plan. After the run:

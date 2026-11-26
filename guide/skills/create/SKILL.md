@@ -66,8 +66,18 @@ Run `uv run "$PLUGIN/toolkit/guidecfg.py" discover --dir "<target>"` first (targ
 
 Only in embedded mode. `HOST` is the repository root.
 
-1. **Clean tree**: `git -C "$HOST" status --porcelain` must be empty. When it is not, stop: "The repository has uncommitted changes. Commit them or set them aside first, so the guide's commits contain only guide work." Write nothing.
-2. **Branch**: when the current branch is the default branch (`origin/HEAD`, else `main`, else `master`), ask: "You are on `<branch>`. Create a working branch for the guide (recommended), or commit the guide directly to `<branch>`?" Offer `guide/<slug>` as the branch name; create it with `git -C "$HOST" switch -c <name>` only after the answer. Every later commit goes to the branch the author approved.
+1. **Clean tree**: check `git -C "$HOST" status --porcelain`. When it is not empty, ask: "The repository has uncommitted changes. Continue in a new worktree on a working branch (it starts from the last commit; your changes stay where they are and are not part of the guide), or stop and commit or set them aside first?" On stop, write nothing. On continue, step 2 asks only for the branch name and the worktree location: on a dirty tree there is no working branch in place and no direct commit, whatever the current branch is.
+2. **Branch**: when the current branch is the default branch (`origin/HEAD`, else `main`, else `master`), ask "You are on `<branch>`. Where should the guide's commits go?" with these options, in this order:
+   - "Working branch in a new worktree (recommended)": your checkout stays on `<branch>` and is not touched, which is also safe when other sessions work in the same checkout.
+   - "Working branch here": `git -C "$HOST" switch -c <name>` in your checkout.
+   - "Commit directly to `<branch>`".
+   Offer `guide/<slug>` as the branch name. Propose the worktree location by the `harness` from the preflight result: when `harness == claude`, `$HOST/.claude/worktrees/guide-<slug>` (the Claude Code worktree location); on other harnesses, a sibling directory `<parent of HOST>/<repository name>-guide-<slug>`. The author may change both. Create nothing before the answer. On another branch with a clean tree, ask nothing. Every later commit goes to the branch the author approved.
+3. **Worktree** (when chosen):
+   - Run `git -C "$HOST" worktree add -b <name> "<path>"`. Use plain git, not a worktree tool of the harness, so the branch keeps the approved name.
+   - For a path under `HOST/.claude/worktrees/`, add `/.claude/worktrees/` to `$(git -C "$HOST" rev-parse --path-format=absolute --git-common-dir)/info/exclude` when it is not there yet (create the `info/` directory when it is missing), so the main checkout stays clean. Never change the host's `.gitignore` for it.
+   - From here on `HOST` is the worktree and `GUIDE` the same relative path inside it (in-repo guide: the chosen subdirectory; embedded: the subdirectory chosen in the intake). When section 3 created an empty target directory in the main checkout, remove it again if it is still empty.
+   - `SESSION` does not change: permission entries are still read from the directory the session was started in.
+   - Tell the author the worktree path and branch, and that a later run must point at it (`/guide:create --dir <worktree>/<guide path>` to resume, or a session started there), because guide discovery skips hidden directories such as `.claude/`.
 
 ## 4. Intake interview (FR-006, FR-005c)
 
@@ -141,7 +151,7 @@ In embedded mode, section 5 changes as follows. Until the move plan is approved 
 5. **Pin the sources**: `uv run tools/guide/fetch.py pin --source self=.. --source <id>=<repo>[@<ref>] ...`. `self` is the host repository: the committed HEAD of the current branch, `ref` the default branch, `web` from a GitHub `origin`. It is read in place and exported outside the repository (`uv run tools/guide/fetch.py where self` prints the snapshot); it is never cloned into `.guide/cache/`. Then `uv run tools/guide/fetch.py fetch`.
 6. **Inputs**: register them as above (`local:<id>` for confidential ones).
 7. **Validate**: `uv run tools/guide/guidecfg.py validate --allow-missing-front-page` (the front page does not exist in its final form yet).
-8. **Session files**: when the author approves a session settings file at the host root (for example `.claude/settings.local.json` for an Excalidraw permission), add its path to `HOST/.git/info/exclude` (untracked), never to the host's `.gitignore`.
+8. **Session files**: when the author approves a session settings file at the host root (for example `.claude/settings.local.json` for an Excalidraw permission), add its path to `$(git -C "$HOST" rev-parse --path-format=absolute --git-common-dir)/info/exclude` (untracked; create the `info/` directory when it is missing; `.git` is a file inside a linked worktree, and the common exclude file also covers the main checkout where `SESSION` lives), never to the host's `.gitignore`.
 9. **No commit yet**: the guide subdirectory stays uncommitted until the author approves the move plan, so a declined plan leaves the branch exactly as it was (section 5a commits the scaffold and the consolidation together). The host's own files are untouched.
 
 Workflows (section 5 step 8 and the pull request check) are installed after section 5a, see "Workflows" below.
@@ -150,7 +160,7 @@ Workflows (section 5 step 8 and the pull request check) are installed after sect
 
 An Antora or MkDocs guide in a subdirectory of an existing repository (for example `docs/guide/`) that is not embedded: the README stays the author's, nothing is consolidated, and the repository is no `self` source (pin it like any other source when the guide describes it). `HOST` is the repository's top level, `GUIDE` the subdirectory.
 
-- **Preconditions**: as in "Embedded preconditions" (clean tree; a working branch offered on the default branch).
+- **Preconditions**: as in "Embedded preconditions" (clean tree or a new worktree; a working branch, in a worktree by default, offered on the default branch).
 - **Intake**: section 4 with these changes. Format: antora or mkdocs (a gfm guide that documents the repository is embedded instead). Question 8: no internal part, because code repositories are often public; ask for confidential terms and patterns only when inputs are confidential, and keep them in `confidential.local.yaml`. Question 13: no remote is created (the repository's `origin` is used); ask only whether to push after each completed task. Questions 12 and 14 (drift check, GitHub Pages) are offered.
 - **Setup**: section 5 with these changes. No `git init` (step 1) and no remote (step 10). Scaffold with `bash "$PLUGIN/scripts/scaffold-project.sh" --format <format> --title "<title>" --in-repo "$GUIDE"` (no `internal/`, `confidential.local.yaml` git-ignored). Confidential terms, patterns, and the real locations of confidential inputs (registered as `local:<id>` in `inputs.yaml`) go to `confidential.local.yaml` from `$PLUGIN/templates/confidential.local.yaml`, never into `guide.yaml`, `inputs.yaml`, run summaries, or findings. Commits contain only files inside `GUIDE` and, for workflows, `HOST/.github/workflows/`.
 - **Workflows**: see section 11.
@@ -245,6 +255,7 @@ Run `make check`, then `uv run tools/guide/check.py --structure` (every persona'
    - every ruling from the ledger ("Rulings I made"), in order, each with what it costs if wrong (FR-014)
    - findings rejected by source, and the upstream findings collected (suggest `/guide:upstream`)
    - unpushed commits, if any
+   - with a worktree: its path and branch, that a pull request is opened from that branch, and that `git -C <main checkout> worktree remove <path>` cleans it up after the merge (run it only when the author asks)
    - with GitHub Pages: the site URL; when Pages was not switched on (declined, or no remote yet), the `gh api` command from step 2 and that deploys fail until Pages is switched on; for a private remote, that the site is public on the web
    - next steps: `/guide:preview`, `/guide:export`, `/guide:validate` (when clusters are configured)
 

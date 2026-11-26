@@ -220,3 +220,20 @@ def test_evolve_help_runs_without_checks():
         assert phrase in help_text, phrase
     for text in [evolve, help_text, preflight] + wrappers:
         assert chr(0x2014) not in text and chr(0x2013) not in text
+
+
+def test_create_offers_worktree_for_working_branch():
+    text = SKILL.read_text()
+    section = text.split("### Embedded preconditions")[1].split("## 4.")[0]
+    order = [section.index(option) for option in (
+        '"Working branch in a new worktree (recommended)"', '"Working branch here"', '"Commit directly to `<branch>`"')]
+    assert order == sorted(order)
+    assert "when `harness == claude`, `$HOST/.claude/worktrees/guide-<slug>`" in section
+    assert "`<parent of HOST>/<repository name>-guide-<slug>`" in section
+    assert 'git -C "$HOST" worktree add -b <name> "<path>"' in section
+    assert '$(git -C "$HOST" rev-parse --path-format=absolute --git-common-dir)/info/exclude' in section
+    assert "Continue in a new worktree on a working branch" in section
+    assert "Commit them or set them aside first, so the guide's commits contain only guide work." not in text
+    assert "`HOST/.git/info/exclude`" not in text
+    assert "worktree remove" in text.split("## 9. Wrap-up")[1]
+    assert chr(0x2014) not in text and chr(0x2013) not in text
