@@ -228,7 +228,7 @@ PY
 }
 
 title=$(cd "$guide" && uv run --quiet tools/guide/guidecfg.py get title)
-pdfname=$(cd "$guide" && uv run --quiet tools/guide/guidecfg.py get slug)-$(cd "$guide" && uv run --quiet tools/guide/guidecfg.py get baseline.captured)
+pdfname=$(cd "$guide" && uv run --quiet tools/guide/guidecfg.py get slug)
 for view in shareable internal; do
   out=$guide/dist/$pdfname.pdf
   [[ $view == internal ]] && out=$guide/dist/$pdfname-INTERNAL.pdf
