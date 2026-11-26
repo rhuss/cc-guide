@@ -1,7 +1,7 @@
 ---
 name: evolve
 description: Evolve a source-verified guide after its sources changed (a guide in its own repository, or a guide embedded in the repository it documents, whose README is the front page). Reports drift against the recorded baseline (check-only mode needs no AI and no superpowers), re-evaluates documented change requests, registers new inputs, updates only the affected pages through superpowers with the same per-page reviews as create, and writes the new baseline last, after the checks pass. Also adopts guides that were not created by cc-guide. Use for /guide:evolve.
-argument-hint: "[--check] [--adopt] [--pages] [--visuals] [--to ID=REF]... [--input PATH]... [--rigor fast|standard|strict] [--dir PATH]"
+argument-hint: "[--help] [--check] [--adopt] [--pages] [--visuals] [--to ID=REF]... [--input PATH]... [--rigor fast|standard|strict] [--dir PATH]"
 user-invocable: false
 allowed-tools: ["Bash", "Read", "Write", "Edit", "Glob", "Grep", "Skill", "Agent", "AskUserQuestion"]
 ---
@@ -14,6 +14,7 @@ Paths and conventions are those of the create skill (`PLUGIN`, `GUIDE`, `WS`). `
 
 | Argument | Meaning |
 |---|---|
+| `--help`, `-h` | Print `help.md` (modes, guide setups, where to run it) and stop; no preflight, no checks, no guide project needed (section 0) |
 | `--check` | Report drift only (FR-025a); change nothing; no superpowers needed |
 | `--adopt` | Adopt a guide without a cc-guide baseline or source blocks (FR-028) |
 | `--pages` | Set up GitHub Pages for this guide (section 3a); no drift run, no superpowers needed |
@@ -23,9 +24,13 @@ Paths and conventions are those of the create skill (`PLUGIN`, `GUIDE`, `WS`). `
 | `--rigor fast\|standard\|strict` | Default from `guide.yaml` |
 | `--dir PATH` | Guide project; default the current directory (a guide project up to three levels below the current directory, embedded or standalone, is found automatically) |
 
+## 0. Help (`--help`, `-h`)
+
+When the arguments contain `--help` or `-h`, read `help.md` in this skill's base directory and print its content as it is. Do nothing else: no preflight, no guide discovery, no commands, no other file reads, whatever other arguments were given. Stop after printing it.
+
 ## 1. Preflight
 
-The `/guide:evolve` command runs `guide:preflight` first. When its result line is not already in this conversation (the skill was invoked directly, as it is on harnesses with no command layer), invoke `guide:preflight` with `evolve` (and `--check`, `--pages`, or `--visuals` when given, with `--dir`) now. Stop when it stops. superpowers is required only without `--check`, `--pages`, and `--visuals`.
+The `/guide:evolve` command runs `guide:preflight` first. When its result line is not already in this conversation (the skill was invoked directly, as it is on harnesses with no command layer), and the arguments do not ask for help (section 0), invoke `guide:preflight` with `evolve` (and `--check`, `--pages`, or `--visuals` when given, with `--dir`) now. Stop when it stops. superpowers is required only without `--check`, `--pages`, and `--visuals`.
 
 ## 2. Check-only mode (`--check`)
 

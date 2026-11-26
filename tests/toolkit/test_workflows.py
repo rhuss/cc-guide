@@ -199,3 +199,24 @@ def test_create_keeps_separate_guides_possible_inside_a_parent_repository():
     text = SKILL.read_text()
     assert "a separate guide in its own repository nested here" in text
     assert "stop and suggest an empty directory outside the repository" not in text
+
+
+def test_evolve_help_runs_without_checks():
+    evolve = (GUIDE / "skills" / "evolve" / "SKILL.md").read_text()
+    help_text = (GUIDE / "skills" / "evolve" / "help.md").read_text()
+    preflight = (GUIDE / "skills" / "preflight" / "SKILL.md").read_text()
+    wrappers = [(GUIDE / "commands" / "evolve.md").read_text(),
+                (GUIDE / "opencode" / "command" / "evolve.md").read_text()]
+    for text in [evolve] + wrappers:
+        assert "[--help]" in text.split("argument-hint:")[1].splitlines()[0]
+    for text in wrappers:   # help is decided before preflight runs
+        assert text.index("`--help` or `-h`") < text.index("Otherwise, use the `guide:preflight` skill")
+    assert evolve.index("## 0. Help") < evolve.index("## 1. Preflight")
+    assert "no preflight, no guide discovery" in evolve
+    assert "`evolve --help` (or `-h`) never runs preflight" in preflight
+    for phrase in ("## Guide setups", "## Where to run it", "Separate guide", "Embedded guide",
+                   "In-repo guide", "Nested separate guide", "Foreign guide", "--dir PATH",
+                   "up to three levels below", "evolve --adopt`", "evolve --check`", "evolve --pages`", "evolve --visuals`"):
+        assert phrase in help_text, phrase
+    for text in [evolve, help_text, preflight] + wrappers:
+        assert chr(0x2014) not in text and chr(0x2013) not in text

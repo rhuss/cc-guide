@@ -16,6 +16,8 @@ Run this before any other step of a `/guide:*` command. It writes no files. When
 - `GUIDE`: the guide project, resolved in step 1 (`--dir PATH` when given, otherwise the current directory, or the one guide project, embedded or standalone, found up to three levels below it). Always an absolute path. Never `cd` into `.guide/cache/`.
 - `SESSION`: the directory this session was started in (the primary working directory in your environment information), resolved to an absolute path. On Claude Code the session's permissions are read from its `.claude/settings*.json` (at its git toplevel inside a repository) and from `~/.claude/settings.json`, not from the guide project's settings when the two differ. Other harnesses manage permissions differently and read no `.claude/settings*.json`.
 
+`evolve --help` (or `-h`) never runs preflight: it only prints the evolve help. When you are invoked with it, stop without any check and let the evolve skill print its help.
+
 ## Steps
 
 ### 1. Guide project

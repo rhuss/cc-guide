@@ -11,7 +11,7 @@ The method comes from building the [Secure Agent Workspace](https://github.com/v
 | Command | What it does |
 |---|---|
 | `/guide:create` | Interview, scaffold, pin sources, plan, write and review every page, final review, run summary |
-| `/guide:evolve` | Drift report against the baseline, targeted page updates with the same reviews, new baseline written last; `--check` reports drift only, `--adopt` brings in an existing guide, `--pages` and `--visuals` add GitHub Pages or captured visuals |
+| `/guide:evolve` | Drift report against the baseline, targeted page updates with the same reviews, new baseline written last; `--check` reports drift only, `--adopt` brings in an existing guide, `--pages` and `--visuals` add GitHub Pages or captured visuals; `--help` explains the modes, the guide setups, and where to run it, without checking anything |
 | `/guide:preview` | Build and serve the guide locally with live reload; shareable or internal view |
 | `/guide:export` | One PDF of the whole guide with a title page, linked table of contents, and page numbers |
 | `/guide:upstream` | Re-verify collected source problems on the current default branch, draft reports, file only what you approve |
